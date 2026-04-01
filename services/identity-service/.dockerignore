@@ -1,0 +1,12 @@
+node_modules
+dist
+coverage
+.env
+.env.local
+.env.*.local
+*.log
+.git
+.gitignore
+.eslintrc.js
+.prettierrc
+README.md

@@ -1,0 +1,135 @@
+services:
+  # --- Shared Infrastructure ---
+  postgres:
+    image: postgres:16-alpine
+    container_name: chassis-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - chassis_pgdata:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: chassis-redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - chassis_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: chassis-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MGMT_PORT:-15672}:15672"
+    volumes:
+      - chassis_rabbit_data:/var/lib/rabbitmq
+      - ./infrastructure/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json
+      - ./infrastructure/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  seq:
+    image: datalust/seq:latest
+    container_name: chassis-seq
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: "Y"
+    ports:
+      - "5341:5341"
+      - "5342:80"
+    volumes:
+      - chassis_seq_data:/data
+
+  identity-service:
+    build:
+      context: ./services/identity-service
+      dockerfile: Dockerfile
+    container_name: chassis-identity
+    ports:
+      - "${IDENTITY_SERVICE_PORT:-3001}:3001"
+    environment:
+      - DATABASE_URL=postgresql://chassis_app:chassis_app_pwd@postgres:5432/saas_chassis?schema=iam
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRY=${JWT_EXPIRY:-15m}
+      - JWT_REFRESH_EXPIRY=${JWT_REFRESH_EXPIRY:-7d}
+      - PORT=3001
+      - NODE_ENV=production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  tenant-manager:
+    build:
+      context: ./services/tenant-manager
+      dockerfile: Dockerfile
+    container_name: chassis-tenant-manager
+    ports:
+      - "${TENANT_MANAGER_PORT:-3002}:3002"
+    environment:
+      - DATABASE_URL=postgresql://chassis_app:chassis_app_pwd@postgres:5432/saas_chassis?schema=tenant_mgmt
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672
+      - JWT_SECRET=${JWT_SECRET}
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN}
+      - IDENTITY_SERVICE_URL=http://identity-service:3001
+      - PORT=3002
+      - NODE_ENV=production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      identity-service:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3002/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  chassis_pgdata:
+  chassis_redis_data:
+  chassis_rabbit_data:
+  chassis_seq_data:

@@ -1,0 +1,50 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+dist/
+build/
+bin/
+obj/
+out/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes (if not using named volumes)
+pgdata/
+redis_data/
+
+# Test
+coverage/
+*.lcov
+
+# Logs
+*.log
+logs/
+
+# .NET
+*.user
+*.suo
+TestResults/
+
+# Go
+vendor/
+
+.claude/
+.agents/
+docs/

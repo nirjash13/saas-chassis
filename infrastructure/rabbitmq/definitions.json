@@ -1,0 +1,95 @@
+{
+  "rabbit_version": "3.13",
+  "users": [
+    {
+      "name": "chassis",
+      "password_hash": "rabbit_local_pwd",
+      "hashing_algorithm": "rabbit_password_hashing_sha256",
+      "tags": "administrator"
+    }
+  ],
+  "vhosts": [
+    { "name": "/" }
+  ],
+  "permissions": [
+    {
+      "user": "chassis",
+      "vhost": "/",
+      "configure": ".*",
+      "write": ".*",
+      "read": ".*"
+    }
+  ],
+  "exchanges": [
+    {
+      "name": "chassis.tenants",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false
+    },
+    {
+      "name": "chassis.billing",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false
+    },
+    {
+      "name": "chassis.audit",
+      "vhost": "/",
+      "type": "fanout",
+      "durable": true,
+      "auto_delete": false
+    },
+    {
+      "name": "chassis.notifications",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false
+    }
+  ],
+  "queues": [
+    {
+      "name": "billing.tenant-provisioned",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false
+    },
+    {
+      "name": "audit.log-entry",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false
+    },
+    {
+      "name": "notifications.email",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false
+    },
+    {
+      "name": "notifications.sms",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false
+    }
+  ],
+  "bindings": [
+    {
+      "source": "chassis.tenants",
+      "vhost": "/",
+      "destination": "billing.tenant-provisioned",
+      "destination_type": "queue",
+      "routing_key": "tenant.provisioned"
+    },
+    {
+      "source": "chassis.audit",
+      "vhost": "/",
+      "destination": "audit.log-entry",
+      "destination_type": "queue",
+      "routing_key": ""
+    }
+  ]
+}

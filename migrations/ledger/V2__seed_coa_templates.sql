@@ -1,0 +1,38 @@
+SET search_path TO ledger;
+
+INSERT INTO account_templates (template_code, template_name, accounts) VALUES
+('residential_association', 'Residential Building Association (Bangladesh)', '[
+  {"code": "1000", "name": "Assets", "type": "asset", "parentCode": null},
+  {"code": "1001", "name": "Cash in Hand", "type": "asset", "parentCode": "1000"},
+  {"code": "1002", "name": "Bank Account (Main)", "type": "asset", "parentCode": "1000"},
+  {"code": "1003", "name": "bKash/Nagad Account", "type": "asset", "parentCode": "1000"},
+  {"code": "1010", "name": "Service Charge Receivable", "type": "asset", "parentCode": "1000"},
+  {"code": "1020", "name": "Sinking Fund (Reserve)", "type": "asset", "parentCode": "1000"},
+  {"code": "2000", "name": "Liabilities", "type": "liability", "parentCode": null},
+  {"code": "2001", "name": "Accounts Payable", "type": "liability", "parentCode": "2000"},
+  {"code": "2002", "name": "Security Deposits", "type": "liability", "parentCode": "2000"},
+  {"code": "2010", "name": "Advance Collections", "type": "liability", "parentCode": "2000"},
+  {"code": "3000", "name": "Equity", "type": "equity", "parentCode": null},
+  {"code": "3001", "name": "Opening Balance", "type": "equity", "parentCode": "3000"},
+  {"code": "3002", "name": "Retained Surplus", "type": "equity", "parentCode": "3000"},
+  {"code": "4000", "name": "Revenue", "type": "revenue", "parentCode": null},
+  {"code": "4001", "name": "Service Charge Income", "type": "revenue", "parentCode": "4000"},
+  {"code": "4002", "name": "Parking Fee Income", "type": "revenue", "parentCode": "4000"},
+  {"code": "4003", "name": "Late Fee Income", "type": "revenue", "parentCode": "4000"},
+  {"code": "4010", "name": "Event Contributions", "type": "revenue", "parentCode": "4000"},
+  {"code": "5000", "name": "Expenses", "type": "expense", "parentCode": null},
+  {"code": "5001", "name": "Electricity (DESCO/DPDC)", "type": "expense", "parentCode": "5000"},
+  {"code": "5002", "name": "Water (WASA)", "type": "expense", "parentCode": "5000"},
+  {"code": "5003", "name": "Gas (TITAS)", "type": "expense", "parentCode": "5000"},
+  {"code": "5010", "name": "Security Guard Salary", "type": "expense", "parentCode": "5000"},
+  {"code": "5011", "name": "Cleaner Salary", "type": "expense", "parentCode": "5000"},
+  {"code": "5012", "name": "Imam Honorarium", "type": "expense", "parentCode": "5000"},
+  {"code": "5013", "name": "Muezzin Honorarium", "type": "expense", "parentCode": "5000"},
+  {"code": "5020", "name": "Lift Maintenance", "type": "expense", "parentCode": "5000"},
+  {"code": "5021", "name": "Generator Maintenance", "type": "expense", "parentCode": "5000"},
+  {"code": "5022", "name": "Plumbing Repairs", "type": "expense", "parentCode": "5000"},
+  {"code": "5023", "name": "Electrical Repairs", "type": "expense", "parentCode": "5000"},
+  {"code": "5030", "name": "Municipal/Holding Tax", "type": "expense", "parentCode": "5000"},
+  {"code": "5040", "name": "Eid/Event Expenses", "type": "expense", "parentCode": "5000"},
+  {"code": "5050", "name": "Miscellaneous Expenses", "type": "expense", "parentCode": "5000"}
+]');
