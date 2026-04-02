@@ -128,6 +128,66 @@ services:
       retries: 5
       start_period: 30s
 
+  billing-engine:
+    build:
+      context: ./services/billing-engine
+      dockerfile: Dockerfile
+    container_name: chassis-billing
+    ports:
+      - "${BILLING_ENGINE_PORT:-3003}:3003"
+    environment:
+      - DATABASE_URL=postgresql://chassis_app:chassis_app_pwd@postgres:5432/saas_chassis?schema=billing
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672
+      - JWT_SECRET=${JWT_SECRET}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+      - STRIPE_SUCCESS_URL=${STRIPE_SUCCESS_URL:-http://localhost:3000/billing/success}
+      - STRIPE_CANCEL_URL=${STRIPE_CANCEL_URL:-http://localhost:3000/billing/cancel}
+      - STRIPE_PORTAL_RETURN_URL=${STRIPE_PORTAL_RETURN_URL:-http://localhost:3000/billing}
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN}
+      - PORT=3003
+      - NODE_ENV=production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      tenant-manager:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3003/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  universal-ledger:
+    build:
+      context: ./services/universal-ledger
+      dockerfile: Dockerfile
+    container_name: chassis-ledger
+    ports:
+      - "${LEDGER_SERVICE_PORT:-3006}:3006"
+    environment:
+      - DATABASE_URL=Host=postgres;Database=saas_chassis;Username=chassis_app;Password=chassis_app_pwd;SearchPath=ledger
+      - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672
+      - SEQ_URL=http://seq:5341
+      - ASPNETCORE_ENVIRONMENT=Production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3006/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   api-gateway:
     build:
       context: ./services/api-gateway
@@ -153,6 +213,29 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+
+  audit-service:
+    build:
+      context: ./services/audit-service
+      dockerfile: Dockerfile
+    container_name: chassis-audit
+    ports:
+      - "${AUDIT_SERVICE_PORT:-3005}:3005"
+    environment:
+      - DATABASE_URL=postgresql://chassis_app:chassis_app_pwd@postgres:5432/saas_chassis
+      - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672
+      - PORT=3005
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3005/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
 volumes:
   chassis_pgdata:

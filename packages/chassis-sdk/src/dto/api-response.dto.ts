@@ -1,12 +1,12 @@
 export class ApiResponseDto<T> {
-  success: boolean;
-  data: T | null;
-  error: {
+  success!: boolean;
+  data!: T | null;
+  error!: {
     code: string;
     message: string;
     details?: Record<string, unknown>;
   } | null;
-  meta: {
+  meta!: {
     requestId: string;
     timestamp: string;
     pagination?: PaginationMeta;
@@ -14,8 +14,8 @@ export class ApiResponseDto<T> {
 }
 
 export class PaginationMeta {
-  page: number;
-  pageSize: number;
-  totalCount: number;
-  totalPages: number;
+  page!: number;
+  pageSize!: number;
+  totalCount!: number;
+  totalPages!: number;
 }

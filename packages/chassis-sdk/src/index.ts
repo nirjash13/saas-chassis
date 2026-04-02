@@ -30,6 +30,7 @@ export {
 export { AuditLog, AUDIT_ACTION_KEY } from './decorators/audit-log.decorator';
 
 // Guards
+export { JwtAuthGuard, Public, IS_PUBLIC_KEY } from './guards/jwt-auth.guard';
 export { RolesGuard } from './guards/roles.guard';
 export { PermissionsGuard } from './guards/permissions.guard';
 export {
@@ -46,13 +47,23 @@ export {
   AuditInterceptor,
   AuditPublisher,
 } from './interceptors/audit.interceptor';
+export { TimeoutInterceptor } from './interceptors/timeout.interceptor';
 
 // Filters
 export { GlobalExceptionFilter } from './filters/global-exception.filter';
 
+// Pipes
+export { ChassisValidationPipe } from './pipes/validation.pipe';
+
+// Services
+export { FeatureFlagService } from './services/feature-flag.service';
+export { AuditPublisherService, AuditEvent } from './services/audit-publisher.service';
+export { InternalHttpService, InternalRequestOptions } from './services/internal-http.service';
+
 // DTOs
 export { ApiResponseDto, PaginationMeta } from './dto/api-response.dto';
 export { PaginationQueryDto } from './dto/pagination.dto';
+export { TenantContextDto } from './dto/tenant-context.dto';
 
 // Types
 export { TenantContext } from './types/tenant-context.interface';
