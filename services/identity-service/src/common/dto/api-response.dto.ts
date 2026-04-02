@@ -1,5 +1,5 @@
 export class ApiResponseDto<T = unknown> {
-  success: boolean;
+  success!: boolean;
   data?: T;
   message?: string;
   errors?: string[];
@@ -14,7 +14,11 @@ export class ApiResponseDto<T = unknown> {
   }
 
   static created<T>(data: T): ApiResponseDto<T> {
-    return new ApiResponseDto({ success: true, data, message: 'Created successfully' });
+    return new ApiResponseDto({
+      success: true,
+      data,
+      message: 'Created successfully',
+    });
   }
 
   static error(message: string, errors?: string[]): ApiResponseDto<null> {

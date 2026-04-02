@@ -4,7 +4,8 @@ export default registerAs('app', () => ({
   port: parseInt(process.env.PORT ?? '3001', 10),
   nodeEnv: process.env.NODE_ENV ?? 'development',
   jwt: {
-    secret: process.env.JWT_SECRET ?? 'changeme-super-secret-at-least-32-chars!!',
+    secret:
+      process.env.JWT_SECRET ?? 'changeme-super-secret-at-least-32-chars!!',
     expiry: process.env.JWT_EXPIRY ?? '15m',
     refreshExpiry: process.env.JWT_REFRESH_EXPIRY ?? '7d',
     impersonationExpiry: '30m',

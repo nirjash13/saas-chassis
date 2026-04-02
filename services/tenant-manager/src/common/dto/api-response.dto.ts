@@ -1,5 +1,5 @@
 export class ApiResponseDto<T = unknown> {
-  success: boolean;
+  success!: boolean;
   data?: T;
   message?: string;
   errors?: string[];

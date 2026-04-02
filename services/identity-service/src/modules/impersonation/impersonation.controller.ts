@@ -29,7 +29,10 @@ export class ImpersonationController {
     @CurrentUser() user: JwtPayload,
     @Body() dto: ImpersonateDto,
   ) {
-    const result = await this.impersonationService.startImpersonation(user, dto);
+    const result = await this.impersonationService.startImpersonation(
+      user,
+      dto,
+    );
     return ApiResponseDto.ok(result, 'Impersonation session started');
   }
 

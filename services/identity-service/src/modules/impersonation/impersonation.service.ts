@@ -26,7 +26,9 @@ export class ImpersonationService {
     private readonly sessionsRepository: Repository<ImpersonationSession>,
     private readonly authService: AuthService,
     private readonly usersService: UsersService,
-    @Optional() @Inject('RABBITMQ_CLIENT') private readonly client: ClientProxy | null,
+    @Optional()
+    @Inject('RABBITMQ_CLIENT')
+    private readonly client: ClientProxy | null,
   ) {}
 
   async startImpersonation(
@@ -35,7 +37,9 @@ export class ImpersonationService {
   ): Promise<{ accessToken: string; sessionId: string }> {
     // Only platform admins can impersonate
     if (!adminUser.isPlatformAdmin) {
-      throw new ForbiddenException('Only platform administrators can impersonate users');
+      throw new ForbiddenException(
+        'Only platform administrators can impersonate users',
+      );
     }
 
     const admin = await this.usersService.findById(adminUser.sub);
@@ -46,7 +50,9 @@ export class ImpersonationService {
     }
 
     if (targetUser.isPlatformAdmin) {
-      throw new ForbiddenException('Cannot impersonate another platform administrator');
+      throw new ForbiddenException(
+        'Cannot impersonate another platform administrator',
+      );
     }
 
     const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
@@ -68,7 +74,6 @@ export class ImpersonationService {
       admin,
       targetUser,
       dto.targetTenantId,
-      savedSession.id,
     );
 
     // Store hash of the token
@@ -92,7 +97,9 @@ export class ImpersonationService {
         })
         .subscribe({
           error: (err: Error) =>
-            this.logger.warn(`Failed to publish impersonation audit: ${err.message}`),
+            this.logger.warn(
+              `Failed to publish impersonation audit: ${err.message}`,
+            ),
         });
     }
 
@@ -107,11 +114,15 @@ export class ImpersonationService {
     currentUser: JwtPayload,
   ): Promise<AccessTokenResponseDto> {
     if (!currentUser.isImpersonating) {
-      throw new ForbiddenException('Current session is not an impersonation session');
+      throw new ForbiddenException(
+        'Current session is not an impersonation session',
+      );
     }
 
     if (!currentUser.realUserId) {
-      throw new UnauthorizedException('Missing realUserId in impersonation token');
+      throw new UnauthorizedException(
+        'Missing realUserId in impersonation token',
+      );
     }
 
     // Find the active session by target user
@@ -143,7 +154,9 @@ export class ImpersonationService {
     return this.authService.reissueAdminToken(currentUser.realUserId);
   }
 
-  async findActiveSessions(adminUserId?: string): Promise<ImpersonationSession[]> {
+  async findActiveSessions(
+    adminUserId?: string,
+  ): Promise<ImpersonationSession[]> {
     const qb = this.sessionsRepository
       .createQueryBuilder('s')
       .where('s.ended_at IS NULL')

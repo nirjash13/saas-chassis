@@ -39,8 +39,7 @@ export class AuthController {
     @Body() _dto: LoginDto,
   ) {
     const ipAddress =
-      (req.headers['x-forwarded-for'] as string) ??
-      req.socket?.remoteAddress;
+      (req.headers['x-forwarded-for'] as string) ?? req.socket?.remoteAddress;
     const deviceInfo = req.headers['user-agent'];
 
     const result = await this.authService.login(

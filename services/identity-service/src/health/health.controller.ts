@@ -28,8 +28,7 @@ export class HealthController {
       dbStatus = 'error';
     }
 
-    const overallStatus =
-      dbStatus === 'ok' ? 'ok' : 'degraded';
+    const overallStatus = dbStatus === 'ok' ? 'ok' : 'degraded';
 
     return {
       status: overallStatus,

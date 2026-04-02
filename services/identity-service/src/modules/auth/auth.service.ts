@@ -16,11 +16,17 @@ import { createHash, randomBytes } from 'crypto';
 import Redis from 'ioredis';
 import { User } from '../users/entities/user.entity';
 import { RefreshToken } from './entities/refresh-token.entity';
-import { Membership, MembershipStatus } from '../memberships/entities/membership.entity';
+import {
+  Membership,
+  MembershipStatus,
+} from '../memberships/entities/membership.entity';
 import { UsersService } from '../users/users.service';
 import { MembershipsService } from '../memberships/memberships.service';
 import { RegisterDto } from './dto/register.dto';
-import { TokenResponseDto, AccessTokenResponseDto } from './dto/token-response.dto';
+import {
+  TokenResponseDto,
+  AccessTokenResponseDto,
+} from './dto/token-response.dto';
 import { JwtPayload } from './strategies/jwt.strategy';
 
 @Injectable()
@@ -35,16 +41,22 @@ export class AuthService {
     private readonly membershipsService: MembershipsService,
     @InjectRepository(RefreshToken)
     private readonly refreshTokenRepository: Repository<RefreshToken>,
-    @Optional() @Inject('RABBITMQ_CLIENT') private readonly client: ClientProxy | null,
+    @Optional()
+    @Inject('RABBITMQ_CLIENT')
+    private readonly client: ClientProxy | null,
   ) {
     const redisUrl =
-      this.configService.get<string>('app.redis.url') ?? 'redis://localhost:6379';
+      this.configService.get<string>('app.redis.url') ??
+      'redis://localhost:6379';
     this.redis = new Redis(redisUrl);
   }
 
   // ---- Credential validation (used by LocalStrategy) ----
 
-  async validateCredentials(email: string, password: string): Promise<User | null> {
+  async validateCredentials(
+    email: string,
+    password: string,
+  ): Promise<User | null> {
     const loginAttemptsKey = `login_attempts:${email.toLowerCase()}`;
 
     // Check if blocked
@@ -78,8 +90,9 @@ export class AuthService {
 
   private async incrementLoginAttempts(key: string): Promise<void> {
     const blockDuration =
-      this.configService.get<number>('app.rateLimit.loginBlockDurationSeconds') ??
-      900;
+      this.configService.get<number>(
+        'app.rateLimit.loginBlockDurationSeconds',
+      ) ?? 900;
     const current = await this.redis.incr(key);
     if (current === 1) {
       await this.redis.expire(key, blockDuration);
@@ -96,9 +109,8 @@ export class AuthService {
     const memberships = await this.membershipsService.findByUserId(user.id);
 
     // Default to first active membership tenant context
-    const primaryMembership = memberships.find(
-      (m) => m.status === MembershipStatus.ACTIVE,
-    ) ?? null;
+    const primaryMembership =
+      memberships.find((m) => m.status === MembershipStatus.ACTIVE) ?? null;
 
     const payload = await this.buildJwtPayload(user, primaryMembership);
     const { accessToken, refreshToken, expiresIn } = await this.issueTokens(
@@ -240,14 +252,15 @@ export class AuthService {
     adminUser: User,
     targetUser: User,
     targetTenantId: string,
-    _sessionId: string,
   ): Promise<string> {
     const membership = await this.membershipsService.findByUserAndTenant(
       targetUser.id,
       targetTenantId,
     );
 
-    const memberships = await this.membershipsService.findByUserId(targetUser.id);
+    const memberships = await this.membershipsService.findByUserId(
+      targetUser.id,
+    );
     const tenantMembership =
       membership ??
       memberships.find((m) => m.tenantId === targetTenantId) ??
@@ -258,7 +271,9 @@ export class AuthService {
       : [];
 
     const permissions: string[] = tenantMembership?.role?.permissions
-      ? tenantMembership.role.permissions.map((p) => `${p.resource}:${p.action}`)
+      ? tenantMembership.role.permissions.map(
+          (p) => `${p.resource}:${p.action}`,
+        )
       : [];
 
     const payload: Omit<JwtPayload, 'iat' | 'exp'> = {
@@ -280,7 +295,10 @@ export class AuthService {
     return this.jwtService.sign(payload, { expiresIn: impersonationExpiry });
   }
 
-  async revokeImpersonationToken(tokenHash: string, expiresAt: Date): Promise<void> {
+  async revokeImpersonationToken(
+    tokenHash: string,
+    expiresAt: Date,
+  ): Promise<void> {
     const ttl = Math.max(
       0,
       Math.floor((expiresAt.getTime() - Date.now()) / 1000),
@@ -290,7 +308,9 @@ export class AuthService {
     }
   }
 
-  async reissueAdminToken(adminUserId: string): Promise<AccessTokenResponseDto> {
+  async reissueAdminToken(
+    adminUserId: string,
+  ): Promise<AccessTokenResponseDto> {
     const user = await this.usersService.findById(adminUserId);
     const memberships = await this.membershipsService.findByUserId(user.id);
     const primaryMembership =
@@ -314,9 +334,9 @@ export class AuthService {
 
     if (membership?.role) {
       roles = [membership.role.name];
-      permissions = membership.role.permissions?.map(
-        (p) => `${p.resource}:${p.action}`,
-      ) ?? [];
+      permissions =
+        membership.role.permissions?.map((p) => `${p.resource}:${p.action}`) ??
+        [];
     }
 
     return {
@@ -359,14 +379,12 @@ export class AuthService {
   }
 
   private signAccessToken(payload: Omit<JwtPayload, 'iat' | 'exp'>): string {
-    const expiry =
-      this.configService.get<string>('app.jwt.expiry') ?? '15m';
+    const expiry = this.configService.get<string>('app.jwt.expiry') ?? '15m';
     return this.jwtService.sign(payload, { expiresIn: expiry });
   }
 
   private getExpiresInSeconds(): number {
-    const expiry =
-      this.configService.get<string>('app.jwt.expiry') ?? '15m';
+    const expiry = this.configService.get<string>('app.jwt.expiry') ?? '15m';
     return this.parseDurationToSeconds(expiry);
   }
 
@@ -387,11 +405,16 @@ export class AuthService {
     const unit = match[2];
 
     switch (unit) {
-      case 's': return value;
-      case 'm': return value * 60;
-      case 'h': return value * 3600;
-      case 'd': return value * 86400;
-      default:  return 900;
+      case 's':
+        return value;
+      case 'm':
+        return value * 60;
+      case 'h':
+        return value * 3600;
+      case 'd':
+        return value * 86400;
+      default:
+        return 900;
     }
   }
 }

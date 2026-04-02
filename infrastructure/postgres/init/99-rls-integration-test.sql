@@ -48,6 +48,21 @@ SELECT 'Test 2 - Platform Admin sees:' AS test, count(*) AS rows FROM ledger.rls
 -- Expected: 2 rows
 COMMIT;
 
+-- Test 3: Tenant A cannot insert data for Tenant B (WITH CHECK violation)
+BEGIN;
+SET LOCAL app.current_tenant_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+SET LOCAL app.is_platform_admin = 'false';
+DO $$
+BEGIN
+  INSERT INTO ledger.rls_test (tenant_id, data)
+    VALUES ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Sneaky insert');
+  RAISE NOTICE 'Test 3 FAILED: cross-tenant insert should have been blocked!';
+EXCEPTION WHEN check_violation THEN
+  RAISE NOTICE 'Test 3 PASSED: cross-tenant insert correctly blocked by WITH CHECK policy';
+END;
+$$;
+COMMIT;
+
 -- Cleanup
 SET ROLE chassis_admin;
 DROP TABLE ledger.rls_test;

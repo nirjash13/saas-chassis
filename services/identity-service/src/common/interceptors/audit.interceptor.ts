@@ -16,7 +16,9 @@ export class AuditInterceptor implements NestInterceptor {
   private readonly logger = new Logger(AuditInterceptor.name);
 
   constructor(
-    @Optional() @Inject('RABBITMQ_CLIENT') private readonly client: ClientProxy | null,
+    @Optional()
+    @Inject('RABBITMQ_CLIENT')
+    private readonly client: ClientProxy | null,
   ) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
@@ -55,7 +57,9 @@ export class AuditInterceptor implements NestInterceptor {
             };
             this.client.emit('audit.http', event).subscribe({
               error: (err: Error) =>
-                this.logger.warn(`Failed to publish audit event: ${err.message}`),
+                this.logger.warn(
+                  `Failed to publish audit event: ${err.message}`,
+                ),
             });
           }
         },

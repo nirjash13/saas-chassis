@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
@@ -44,7 +45,7 @@ export class TenantsController {
     @Request() req: RequestWithUser,
   ): Promise<ApiResponseDto<TenantResponseDto>> {
     if (!req.user.isPlatformAdmin) {
-      return ApiResponseDto.error('Only platform admins can provision tenants');
+      throw new ForbiddenException('Only platform admins can provision tenants');
     }
     const tenant = await this.tenantsService.createTenant(dto, req.user.sub);
     return ApiResponseDto.created(TenantResponseDto.fromEntity(tenant));
@@ -61,7 +62,7 @@ export class TenantsController {
     @Request() req: RequestWithUser,
   ): Promise<ApiResponseDto<TenantResponseDto[]>> {
     if (!req.user.isPlatformAdmin) {
-      return ApiResponseDto.error('Only platform admins can list all tenants');
+      throw new ForbiddenException('Only platform admins can list all tenants');
     }
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
@@ -86,7 +87,7 @@ export class TenantsController {
   ): Promise<ApiResponseDto<TenantResponseDto>> {
     const user = req.user;
     if (!user.isPlatformAdmin && user.tenantId !== id) {
-      return ApiResponseDto.error('Access denied to this tenant');
+      throw new ForbiddenException('Access denied to this tenant');
     }
     const tenant = await this.tenantsService.findById(id);
     return ApiResponseDto.ok(TenantResponseDto.fromEntity(tenant));
@@ -104,11 +105,11 @@ export class TenantsController {
   ): Promise<ApiResponseDto<TenantResponseDto>> {
     const user = req.user;
     if (!user.isPlatformAdmin && user.tenantId !== id) {
-      return ApiResponseDto.error('Access denied to this tenant');
+      throw new ForbiddenException('Access denied to this tenant');
     }
     // Only platform admins can change plan
     if (dto.plan && !user.isPlatformAdmin) {
-      return ApiResponseDto.error('Only platform admins can change the subscription plan');
+      throw new ForbiddenException('Only platform admins can change the subscription plan');
     }
     const tenant = await this.tenantsService.updateTenant(id, dto);
     return ApiResponseDto.ok(TenantResponseDto.fromEntity(tenant));
@@ -126,7 +127,7 @@ export class TenantsController {
     @Request() req: RequestWithUser,
   ): Promise<ApiResponseDto<TenantResponseDto>> {
     if (!req.user.isPlatformAdmin) {
-      return ApiResponseDto.error('Only platform admins can suspend tenants');
+      throw new ForbiddenException('Only platform admins can suspend tenants');
     }
     const tenant = await this.tenantsService.suspendTenant(id, dto);
     return ApiResponseDto.ok(TenantResponseDto.fromEntity(tenant));
@@ -143,7 +144,7 @@ export class TenantsController {
     @Request() req: RequestWithUser,
   ): Promise<ApiResponseDto<TenantResponseDto>> {
     if (!req.user.isPlatformAdmin) {
-      return ApiResponseDto.error('Only platform admins can activate tenants');
+      throw new ForbiddenException('Only platform admins can activate tenants');
     }
     const tenant = await this.tenantsService.activateTenant(id);
     return ApiResponseDto.ok(TenantResponseDto.fromEntity(tenant));
@@ -160,7 +161,7 @@ export class TenantsController {
     @Request() req: RequestWithUser,
   ): Promise<void> {
     if (!req.user.isPlatformAdmin) {
-      return;
+      throw new ForbiddenException('Only platform admins can archive tenants');
     }
     await this.tenantsService.archiveTenant(id);
   }

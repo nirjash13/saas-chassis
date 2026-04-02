@@ -23,7 +23,9 @@ export class MembershipsService {
     private readonly membershipsRepository: Repository<Membership>,
     @Inject(forwardRef(() => RolesService))
     private readonly rolesService: RolesService,
-    @Optional() @Inject('RABBITMQ_CLIENT') private readonly client: ClientProxy | null,
+    @Optional()
+    @Inject('RABBITMQ_CLIENT')
+    private readonly client: ClientProxy | null,
   ) {}
 
   async findByUserId(userId: string): Promise<Membership[]> {
@@ -82,7 +84,9 @@ export class MembershipsService {
         })
         .subscribe({
           error: (err: Error) =>
-            this.logger.warn(`Failed to publish tenant.user-added: ${err.message}`),
+            this.logger.warn(
+              `Failed to publish tenant.user-added: ${err.message}`,
+            ),
         });
     }
 

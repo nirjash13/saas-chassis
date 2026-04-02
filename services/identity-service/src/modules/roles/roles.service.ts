@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import { Role } from './entities/role.entity';
@@ -40,7 +36,10 @@ export class RolesService {
     return role;
   }
 
-  async findByName(name: string, tenantId?: string | null): Promise<Role | null> {
+  async findByName(
+    name: string,
+    tenantId?: string | null,
+  ): Promise<Role | null> {
     return this.rolesRepository.findOne({
       where: { name, tenantId: tenantId ?? IsNull() },
       relations: ['permissions'],
@@ -53,6 +52,8 @@ export class RolesService {
   }
 
   async findAllPermissions(): Promise<Permission[]> {
-    return this.permissionsRepository.find({ order: { resource: 'ASC', action: 'ASC' } });
+    return this.permissionsRepository.find({
+      order: { resource: 'ASC', action: 'ASC' },
+    });
   }
 }
