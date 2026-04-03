@@ -1,14 +1,11 @@
 import {
   ForbiddenException,
-  Inject,
   Injectable,
   Logger,
-  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
-import { ClientProxy } from '@nestjs/microservices';
 import { createHash } from 'crypto';
 import { ImpersonationSession } from './entities/impersonation-session.entity';
 import { ImpersonateDto } from './dto/impersonate.dto';
@@ -16,6 +13,7 @@ import { AuthService } from '../auth/auth.service';
 import { UsersService } from '../users/users.service';
 import { AccessTokenResponseDto } from '../auth/dto/token-response.dto';
 import { JwtPayload } from '../auth/strategies/jwt.strategy';
+import { RabbitMqPublisherService } from '../../common/messaging/rabbitmq-publisher.service';
 
 @Injectable()
 export class ImpersonationService {
@@ -26,9 +24,7 @@ export class ImpersonationService {
     private readonly sessionsRepository: Repository<ImpersonationSession>,
     private readonly authService: AuthService,
     private readonly usersService: UsersService,
-    @Optional()
-    @Inject('RABBITMQ_CLIENT')
-    private readonly client: ClientProxy | null,
+    private readonly rabbitMqPublisher: RabbitMqPublisherService,
   ) {}
 
   async startImpersonation(
@@ -82,26 +78,17 @@ export class ImpersonationService {
     await this.sessionsRepository.save(savedSession);
 
     // Publish audit event
-    if (this.client) {
-      this.client
-        .emit('chassis.audit', {
-          userId: admin.id,
-          action: 'impersonate',
-          meta: {
-            targetUserId: targetUser.id,
-            targetTenantId: dto.targetTenantId,
-            reason: dto.reason,
-            sessionId: savedSession.id,
-          },
-          timestamp: new Date().toISOString(),
-        })
-        .subscribe({
-          error: (err: Error) =>
-            this.logger.warn(
-              `Failed to publish impersonation audit: ${err.message}`,
-            ),
-        });
-    }
+    this.rabbitMqPublisher.publish('chassis.audit', 'user.impersonate', {
+      userId: admin.id,
+      action: 'impersonate',
+      meta: {
+        targetUserId: targetUser.id,
+        targetTenantId: dto.targetTenantId,
+        reason: dto.reason,
+        sessionId: savedSession.id,
+      },
+      timestamp: new Date().toISOString(),
+    });
 
     this.logger.log(
       `Admin ${admin.id} started impersonating user ${targetUser.id} in tenant ${dto.targetTenantId}`,

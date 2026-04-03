@@ -7,10 +7,17 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog"
 	"github.com/your-org/saas-chassis/audit-service/internal/repository"
 )
+
+// isValidUUID reports whether s is a valid UUID string.
+func isValidUUID(s string) bool {
+	_, err := uuid.Parse(s)
+	return err == nil
+}
 
 // callerCtx holds the authenticated caller's identity extracted from X-headers
 // injected by the API gateway.
@@ -53,9 +60,20 @@ func (h *AuditHandler) ListEntries(c *gin.Context) {
 		return
 	}
 
+	tenantID := c.Query("tenantId")
+	if tenantID != "" && !isValidUUID(tenantID) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid tenantId format"})
+		return
+	}
+	userID := c.Query("userId")
+	if userID != "" && !isValidUUID(userID) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid userId format"})
+		return
+	}
+
 	filter := repository.QueryFilter{
-		TenantID:     c.Query("tenantId"),
-		UserID:       c.Query("userId"),
+		TenantID:     tenantID,
+		UserID:       userID,
 		Action:       c.Query("action"),
 		ResourceType: c.Query("resourceType"),
 		Page:         parseIntQuery(c, "page", 1),
@@ -101,12 +119,18 @@ func (h *AuditHandler) GetEntry(c *gin.Context) {
 		return
 	}
 
+	id := c.Param("id")
+	if !isValidUUID(id) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id format"})
+		return
+	}
+
 	tc := repository.TenantContext{
 		TenantID:        caller.TenantID,
 		IsPlatformAdmin: caller.IsPlatformAdmin,
 	}
 
-	entry, err := h.repo.FindByID(c.Request.Context(), tc, c.Param("id"))
+	entry, err := h.repo.FindByID(c.Request.Context(), tc, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})

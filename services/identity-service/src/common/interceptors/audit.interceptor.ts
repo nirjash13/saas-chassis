@@ -1,25 +1,19 @@
 import {
   CallHandler,
   ExecutionContext,
-  Inject,
   Injectable,
   Logger,
   NestInterceptor,
-  Optional,
 } from '@nestjs/common';
 import { Observable, tap } from 'rxjs';
-import { ClientProxy } from '@nestjs/microservices';
 import { JwtPayload } from '../../modules/auth/strategies/jwt.strategy';
+import { RabbitMqPublisherService } from '../messaging/rabbitmq-publisher.service';
 
 @Injectable()
 export class AuditInterceptor implements NestInterceptor {
   private readonly logger = new Logger(AuditInterceptor.name);
 
-  constructor(
-    @Optional()
-    @Inject('RABBITMQ_CLIENT')
-    private readonly client: ClientProxy | null,
-  ) {}
+  constructor(private readonly rabbitMqPublisher: RabbitMqPublisherService) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const request = context.switchToHttp().getRequest<{
@@ -41,7 +35,7 @@ export class AuditInterceptor implements NestInterceptor {
     return next.handle().pipe(
       tap({
         next: () => {
-          if (user && this.client) {
+          if (user) {
             const event = {
               userId: user.sub,
               action: `${method.toLowerCase()}:${url}`,
@@ -55,12 +49,7 @@ export class AuditInterceptor implements NestInterceptor {
               },
               timestamp: new Date().toISOString(),
             };
-            this.client.emit('audit.http', event).subscribe({
-              error: (err: Error) =>
-                this.logger.warn(
-                  `Failed to publish audit event: ${err.message}`,
-                ),
-            });
+            this.rabbitMqPublisher.publish('chassis.audit', 'http.request', event);
           }
         },
         error: () => {

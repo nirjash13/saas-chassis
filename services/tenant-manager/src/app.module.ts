@@ -1,4 +1,4 @@
-import { Module, OnApplicationBootstrap, Logger } from '@nestjs/common';
+import { Module, MiddlewareConsumer, NestModule, OnApplicationBootstrap, Logger } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import appConfig from './config/app.config';
@@ -18,6 +18,10 @@ import { PlansModule } from './modules/plans/plans.module';
 
 // Controllers
 import { HealthController } from './health/health.controller';
+
+// RLS
+import { RlsSubscriber } from './common/database/rls.subscriber';
+import { TenantContextMiddleware } from './common/middleware/tenant-context.middleware';
 
 @Module({
   imports: [
@@ -47,7 +51,7 @@ import { HealthController } from './health/health.controller';
     }),
 
     // ── Infrastructure ────────────────────────────────────────────────────────
-    // MessagingModule is @Global() — provides REDIS_CLIENT and RABBITMQ_CLIENT
+    // MessagingModule is @Global() — provides REDIS_CLIENT and RabbitMqPublisherService
     // to all modules without needing to import it individually.
     MessagingModule,
 
@@ -62,10 +66,14 @@ import { HealthController } from './health/health.controller';
 
   controllers: [HealthController],
 
-  providers: [],
+  providers: [RlsSubscriber],
 })
-export class AppModule implements OnApplicationBootstrap {
+export class AppModule implements NestModule, OnApplicationBootstrap {
   private readonly logger = new Logger(AppModule.name);
+
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(TenantContextMiddleware).forRoutes('*');
+  }
 
   async onApplicationBootstrap(): Promise<void> {
     this.logger.log('Tenant Manager Service bootstrap complete');

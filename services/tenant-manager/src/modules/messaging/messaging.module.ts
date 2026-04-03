@@ -1,36 +1,16 @@
 import { Global, Logger, Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { ClientsModule, Transport } from '@nestjs/microservices';
+import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
+import { RabbitMqPublisherService } from '../../common/messaging/rabbitmq-publisher.service';
 
 /**
- * Global module that provides REDIS_CLIENT and RABBITMQ_CLIENT tokens.
- * Marking it @Global() means all modules can inject these without needing to import MessagingModule.
+ * Global module that provides REDIS_CLIENT and RabbitMqPublisherService
+ * to all modules without needing to import MessagingModule individually.
  */
 @Global()
 @Module({
-  imports: [
-    ClientsModule.registerAsync([
-      {
-        name: 'RABBITMQ_CLIENT',
-        imports: [ConfigModule],
-        inject: [ConfigService],
-        useFactory: (configService: ConfigService) => ({
-          transport: Transport.RMQ,
-          options: {
-            urls: [
-              configService.get<string>('app.rabbitmq.url') ??
-                'amqp://guest:guest@localhost:5672',
-            ],
-            queue: 'tenant_manager_publisher_queue',
-            queueOptions: { durable: true },
-            noAck: false,
-          },
-        }),
-      },
-    ]),
-  ],
   providers: [
+    RabbitMqPublisherService,
     {
       provide: 'REDIS_CLIENT',
       inject: [ConfigService],
@@ -55,6 +35,6 @@ import Redis from 'ioredis';
       },
     },
   ],
-  exports: ['REDIS_CLIENT', 'RABBITMQ_CLIENT', ClientsModule],
+  exports: ['REDIS_CLIENT', RabbitMqPublisherService],
 })
 export class MessagingModule {}

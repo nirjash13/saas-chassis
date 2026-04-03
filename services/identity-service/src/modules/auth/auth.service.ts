@@ -1,16 +1,14 @@
 import {
   ForbiddenException,
-  Inject,
   Injectable,
   Logger,
-  Optional,
+  OnModuleDestroy,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { ClientProxy } from '@nestjs/microservices';
 import { compareSync } from 'bcryptjs';
 import { createHash, randomBytes } from 'crypto';
 import Redis from 'ioredis';
@@ -28,9 +26,10 @@ import {
   AccessTokenResponseDto,
 } from './dto/token-response.dto';
 import { JwtPayload } from './strategies/jwt.strategy';
+import { RabbitMqPublisherService } from '../../common/messaging/rabbitmq-publisher.service';
 
 @Injectable()
-export class AuthService {
+export class AuthService implements OnModuleDestroy {
   private readonly logger = new Logger(AuthService.name);
   private readonly redis: Redis;
 
@@ -41,14 +40,16 @@ export class AuthService {
     private readonly membershipsService: MembershipsService,
     @InjectRepository(RefreshToken)
     private readonly refreshTokenRepository: Repository<RefreshToken>,
-    @Optional()
-    @Inject('RABBITMQ_CLIENT')
-    private readonly client: ClientProxy | null,
+    private readonly rabbitMqPublisher: RabbitMqPublisherService,
   ) {
     const redisUrl =
       this.configService.get<string>('app.redis.url') ??
       'redis://localhost:6379';
     this.redis = new Redis(redisUrl);
+  }
+
+  async onModuleDestroy(): Promise<void> {
+    await this.redis.quit();
   }
 
   // ---- Credential validation (used by LocalStrategy) ----
@@ -123,19 +124,12 @@ export class AuthService {
     await this.usersService.updateLastLogin(user.id);
 
     // Publish audit event
-    if (this.client) {
-      this.client
-        .emit('chassis.audit', {
-          userId: user.id,
-          action: 'login',
-          meta: { email: user.email, ipAddress },
-          timestamp: new Date().toISOString(),
-        })
-        .subscribe({
-          error: (err: Error) =>
-            this.logger.warn(`Failed to publish login audit: ${err.message}`),
-        });
-    }
+    this.rabbitMqPublisher.publish('chassis.audit', 'user.login', {
+      userId: user.id,
+      action: 'login',
+      meta: { email: user.email, ipAddress },
+      timestamp: new Date().toISOString(),
+    });
 
     return { accessToken, refreshToken, expiresIn, tokenType: 'Bearer' };
   }

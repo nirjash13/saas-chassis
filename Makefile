@@ -28,10 +28,7 @@ ps:
 
 # Run Flyway migrations for all schemas
 migrate:
-	@echo "Running IAM migrations..."
-	docker compose run --rm flyway -url=jdbc:postgresql://postgres:5432/saas_chassis -schemas=iam -locations=filesystem:/flyway/sql/iam migrate
-	@echo "Running Tenant migrations..."
-	docker compose run --rm flyway -url=jdbc:postgresql://postgres:5432/saas_chassis -schemas=tenant_mgmt -locations=filesystem:/flyway/sql/tenants migrate
+	docker compose --profile migrate up flyway
 
 # Wipe all data (development only)
 clean:

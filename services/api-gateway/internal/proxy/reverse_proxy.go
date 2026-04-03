@@ -2,9 +2,11 @@ package proxy
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
@@ -16,6 +18,12 @@ func proxyTo(targetBase string, logger zerolog.Logger) gin.HandlerFunc {
 		panic("invalid proxy target: " + targetBase)
 	}
 	proxy := httputil.NewSingleHostReverseProxy(targetURL)
+	proxy.Transport = &http.Transport{
+		ResponseHeaderTimeout: 30 * time.Second,
+		DialContext: (&net.Dialer{
+			Timeout: 10 * time.Second,
+		}).DialContext,
+	}
 
 	proxy.Director = func(req *http.Request) {
 		req.URL.Scheme = targetURL.Scheme

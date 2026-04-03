@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Param,
   ParseUUIDPipe,
@@ -48,7 +49,7 @@ export class FeaturesController {
     const user = req.user;
     // Enforce tenant isolation: non-platform admins can only view their own tenant
     if (!user.isPlatformAdmin && user.tenantId !== tenantId) {
-      return ApiResponseDto.error('Access denied to this tenant');
+      throw new ForbiddenException('Access denied to this tenant');
     }
     const features = await this.featuresService.findTenantFeatures(tenantId);
     return ApiResponseDto.ok(features);
@@ -68,7 +69,7 @@ export class FeaturesController {
   ): Promise<ApiResponseDto<unknown>> {
     const user = req.user;
     if (!user.isPlatformAdmin) {
-      return ApiResponseDto.error('Only platform admins can toggle features');
+      throw new ForbiddenException('Only platform admins can toggle features');
     }
     const result = await this.featuresService.toggleFeature(
       tenantId,

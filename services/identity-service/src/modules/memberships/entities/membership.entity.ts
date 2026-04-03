@@ -32,7 +32,9 @@ export class Membership {
   roleId!: string;
 
   @Column({
-    type: 'varchar',
+    name: 'status',
+    type: 'enum',
+    enum: MembershipStatus,
     default: MembershipStatus.ACTIVE,
   })
   status!: MembershipStatus;

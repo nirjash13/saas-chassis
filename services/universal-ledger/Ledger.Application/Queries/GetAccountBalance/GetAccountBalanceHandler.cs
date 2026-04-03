@@ -21,7 +21,7 @@ public class GetAccountBalanceHandler : IRequestHandler<GetAccountBalanceQuery, 
             ?? throw new InvalidOperationException($"Account {request.AccountId} not found.");
 
         var asOfDate = request.AsOfDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
-        var entries = await _entries.GetByTenantAsync(request.TenantId, toDate: asOfDate, status: EntryStatus.Posted, cancellationToken: cancellationToken);
+        var entries = await _entries.GetByTenantAsync(request.TenantId, toDate: asOfDate, status: EntryStatus.Posted, ct: cancellationToken);
 
         var lines = entries.SelectMany(e => e.Lines).Where(l => l.AccountId == request.AccountId).ToList();
         var totalDebits = lines.Sum(l => l.DebitAmount);

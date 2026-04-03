@@ -20,15 +20,17 @@ public class JournalEntryRepository : IJournalEntryRepository
         DateOnly? fromDate = null,
         DateOnly? toDate = null,
         EntryStatus? status = null,
+        Guid? accountId = null,
         CancellationToken ct = default)
     {
         var query = _context.JournalEntries
             .Include(e => e.Lines)
             .Where(e => e.TenantId == tenantId);
 
-        if (fromDate.HasValue) query = query.Where(e => e.EntryDate >= fromDate.Value);
-        if (toDate.HasValue)   query = query.Where(e => e.EntryDate <= toDate.Value);
-        if (status.HasValue)   query = query.Where(e => e.Status == status.Value);
+        if (fromDate.HasValue)  query = query.Where(e => e.EntryDate >= fromDate.Value);
+        if (toDate.HasValue)    query = query.Where(e => e.EntryDate <= toDate.Value);
+        if (status.HasValue)    query = query.Where(e => e.Status == status.Value);
+        if (accountId.HasValue) query = query.Where(e => e.Lines.Any(l => l.AccountId == accountId.Value));
 
         return await query.OrderBy(e => e.EntryDate).ToListAsync(ct);
     }

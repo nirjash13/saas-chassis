@@ -17,6 +17,8 @@ public class JournalEntry
     public Guid? ReversedById { get; private set; }
     public Guid? ReversalOfId { get; private set; }
     public string? SourceModule { get; private set; }
+    public int EntryNumber { get; private set; }
+    public string Tags { get; private set; } = "[]";
     public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; private set; } = DateTime.UtcNow;
 

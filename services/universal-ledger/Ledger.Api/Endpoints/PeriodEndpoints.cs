@@ -1,5 +1,6 @@
 using Ledger.Application.Commands.CloseFiscalPeriod;
 using Ledger.Application.Commands.CreateFiscalPeriod;
+using Ledger.Application.DTOs;
 using Ledger.Domain.Interfaces;
 using MediatR;
 
@@ -15,7 +16,12 @@ public static class PeriodEndpoints
         {
             var tenantId = GetTenantId(ctx);
             var result = await periods.GetByTenantAsync(tenantId);
-            return Results.Ok(result);
+            var dtos = result.Select(p => new FiscalPeriodDto(
+                p.Id, p.TenantId, p.Name, p.StartDate, p.EndDate,
+                p.Status, p.ClosedBy, p.ClosedAt, p.OpeningBalanceEntryId,
+                p.CreatedAt, p.UpdatedAt
+            )).ToList();
+            return Results.Ok(dtos);
         });
 
         group.MapPost("/", async (CreatePeriodRequest req, IMediator mediator, HttpContext ctx) =>

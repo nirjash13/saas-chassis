@@ -1,14 +1,12 @@
 import {
   BadRequestException,
-  Inject,
   Injectable,
   Logger,
   NotFoundException,
-  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { ConfigService } from '@nestjs/config';
 import { DataSource, Repository } from 'typeorm';
-import { ClientProxy } from '@nestjs/microservices';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const slugify = require('slugify') as (str: string, opts?: Record<string, unknown>) => string;
 import { v4 as uuidv4 } from 'uuid';
@@ -23,6 +21,7 @@ import {
   TenantSuspendedEvent,
   TenantPlanChangedEvent,
 } from './events/tenant-provisioned.event';
+import { RabbitMqPublisherService } from '../../common/messaging/rabbitmq-publisher.service';
 
 export interface PaginatedTenants {
   items: Tenant[];
@@ -35,13 +34,30 @@ export interface PaginatedTenants {
 export class TenantsService {
   private readonly logger = new Logger(TenantsService.name);
 
+  // Plan-to-features mapping used when syncing tenant_features on plan change
+  private readonly planFeatures: Record<string, string[]> = {
+    free: ['basic_reporting'],
+    starter: ['basic_reporting', 'api_access', 'webhooks'],
+    pro: ['basic_reporting', 'api_access', 'webhooks', 'advanced_analytics', 'sso'],
+    enterprise: [
+      'basic_reporting',
+      'api_access',
+      'webhooks',
+      'advanced_analytics',
+      'sso',
+      'custom_domain',
+      'audit_logs',
+    ],
+  };
+
   constructor(
     @InjectRepository(Tenant)
     private readonly tenantRepo: Repository<Tenant>,
     private readonly dataSource: DataSource,
     private readonly plansService: PlansService,
     private readonly featuresService: FeaturesService,
-    @Optional() @Inject('RABBITMQ_CLIENT') private readonly rabbitClient: ClientProxy | null,
+    private readonly configService: ConfigService,
+    private readonly rabbitMqPublisher: RabbitMqPublisherService,
   ) {}
 
   // ─── Read Operations ─────────────────────────────────────────────────────
@@ -144,21 +160,38 @@ export class TenantsService {
       return provisioned;
     });
 
-    // 4. Publish event outside the transaction
-    if (this.rabbitClient) {
-      const event = new TenantProvisionedEvent({
-        tenantId: savedTenant.id,
-        slug: savedTenant.slug,
-        plan: savedTenant.currentPlan,
-        adminEmail: savedTenant.adminEmail,
-      });
-      this.rabbitClient
-        .emit('tenant.provisioned', event)
-        .subscribe({
-          error: (err: Error) =>
-            this.logger.warn(`Failed to publish tenant.provisioned: ${err.message}`),
+    // 4. Create owner membership in identity service
+    const identityServiceUrl = this.configService.get<string>('app.identityServiceUrl');
+    const token = this.configService.get<string>('app.internalServiceToken');
+    if (identityServiceUrl && token) {
+      try {
+        await fetch(`${identityServiceUrl}/api/v1/memberships`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Service-Token': token,
+            'X-Tenant-ID': savedTenant.id,
+            'X-User-ID': createdByUserId,
+          },
+          body: JSON.stringify({
+            userId: createdByUserId,
+            tenantId: savedTenant.id,
+            role: 'owner',
+          }),
         });
+      } catch (err) {
+        this.logger.warn(`Failed to create membership in identity service: ${err}`);
+      }
     }
+
+    // 5. Publish event outside the transaction
+    const provisionedEvent = new TenantProvisionedEvent({
+      tenantId: savedTenant.id,
+      slug: savedTenant.slug,
+      plan: savedTenant.currentPlan,
+      adminEmail: savedTenant.adminEmail,
+    });
+    this.rabbitMqPublisher.publish('chassis.tenants', 'tenant.provisioned', provisionedEvent);
 
     this.logger.log(`Provisioned tenant ${savedTenant.id} (${savedTenant.slug}) on plan ${planCode}`);
     return savedTenant;
@@ -190,23 +223,24 @@ export class TenantsService {
 
       const saved = await this.tenantRepo.save(tenant);
 
+      // Sync tenant_features table: delete existing rows and insert new plan's features.
+      // Fall back to the static planFeatures map when the plan record has no includedFeatures.
+      const featuresToSync: string[] =
+        featureCodes.length > 0
+          ? featureCodes
+          : (this.planFeatures[dto.plan] ?? []);
+      await this.featuresService.replaceTenantFeatures(id, featuresToSync, id);
+
       // Invalidate all cached features for this tenant
       await this.featuresService.invalidateTenantFeatureCache(id);
 
       // Publish plan-changed event
-      if (this.rabbitClient) {
-        const event = new TenantPlanChangedEvent({
-          tenantId: id,
-          oldPlan,
-          newPlan: dto.plan,
-        });
-        this.rabbitClient
-          .emit('tenant.plan-changed', event)
-          .subscribe({
-            error: (err: Error) =>
-              this.logger.warn(`Failed to publish tenant.plan-changed: ${err.message}`),
-          });
-      }
+      const planChangedEvent = new TenantPlanChangedEvent({
+        tenantId: id,
+        oldPlan,
+        newPlan: dto.plan,
+      });
+      this.rabbitMqPublisher.publish('chassis.tenants', 'tenant.plan-changed', planChangedEvent);
 
       return saved;
     }
@@ -230,15 +264,8 @@ export class TenantsService {
     tenant.suspendedAt = new Date();
     const saved = await this.tenantRepo.save(tenant);
 
-    if (this.rabbitClient) {
-      const event = new TenantSuspendedEvent({ tenantId: id, reason: dto.reason });
-      this.rabbitClient
-        .emit('tenant.suspended', event)
-        .subscribe({
-          error: (err: Error) =>
-            this.logger.warn(`Failed to publish tenant.suspended: ${err.message}`),
-        });
-    }
+    const suspendedEvent = new TenantSuspendedEvent({ tenantId: id, reason: dto.reason });
+    this.rabbitMqPublisher.publish('chassis.tenants', 'tenant.suspended', suspendedEvent);
 
     this.logger.log(`Suspended tenant ${id}${dto.reason ? ` — reason: ${dto.reason}` : ''}`);
     return saved;

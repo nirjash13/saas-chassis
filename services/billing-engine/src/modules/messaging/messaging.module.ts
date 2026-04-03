@@ -1,32 +1,12 @@
 import { Global, Logger, Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { ClientsModule, Transport } from '@nestjs/microservices';
+import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
+import { RabbitMqPublisherService } from '../../common/messaging/rabbitmq-publisher.service';
 
 @Global()
 @Module({
-  imports: [
-    ClientsModule.registerAsync([
-      {
-        name: 'RABBITMQ_CLIENT',
-        imports: [ConfigModule],
-        inject: [ConfigService],
-        useFactory: (configService: ConfigService) => ({
-          transport: Transport.RMQ,
-          options: {
-            urls: [
-              configService.get<string>('app.rabbitmq.url') ??
-                'amqp://guest:guest@localhost:5672',
-            ],
-            queue: 'billing_publisher_queue',
-            queueOptions: { durable: true },
-            noAck: false,
-          },
-        }),
-      },
-    ]),
-  ],
   providers: [
+    RabbitMqPublisherService,
     {
       provide: 'REDIS_CLIENT',
       inject: [ConfigService],
@@ -34,7 +14,6 @@ import Redis from 'ioredis';
         const redisUrl =
           configService.get<string>('app.redis.url') ?? 'redis://localhost:6379';
         const client = new Redis(redisUrl, {
-          lazyConnect: true,
           maxRetriesPerRequest: 3,
           enableReadyCheck: true,
         });
@@ -51,6 +30,6 @@ import Redis from 'ioredis';
       },
     },
   ],
-  exports: ['REDIS_CLIENT', 'RABBITMQ_CLIENT', ClientsModule],
+  exports: ['REDIS_CLIENT', RabbitMqPublisherService],
 })
 export class MessagingModule {}

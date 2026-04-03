@@ -5,14 +5,13 @@ import {
   Injectable,
   Logger,
   NotFoundException,
-  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { ClientProxy } from '@nestjs/microservices';
 import { Membership, MembershipStatus } from './entities/membership.entity';
 import { CreateMembershipDto } from './dto/create-membership.dto';
 import { RolesService } from '../roles/roles.service';
+import { RabbitMqPublisherService } from '../../common/messaging/rabbitmq-publisher.service';
 
 @Injectable()
 export class MembershipsService {
@@ -23,9 +22,7 @@ export class MembershipsService {
     private readonly membershipsRepository: Repository<Membership>,
     @Inject(forwardRef(() => RolesService))
     private readonly rolesService: RolesService,
-    @Optional()
-    @Inject('RABBITMQ_CLIENT')
-    private readonly client: ClientProxy | null,
+    private readonly rabbitMqPublisher: RabbitMqPublisherService,
   ) {}
 
   async findByUserId(userId: string): Promise<Membership[]> {
@@ -53,42 +50,45 @@ export class MembershipsService {
   }
 
   async create(dto: CreateMembershipDto): Promise<Membership> {
-    const existing = await this.findByUserAndTenant(dto.userId, dto.tenantId);
-    if (existing) {
-      throw new ConflictException(
-        `User ${dto.userId} already has a membership in tenant ${dto.tenantId}`,
-      );
-    }
+    // Check for any existing record, including soft-deleted (status=REMOVED) ones
+    const existing = await this.membershipsRepository.findOne({
+      where: { userId: dto.userId, tenantId: dto.tenantId },
+    });
 
     // Validate the role exists
     const role = await this.rolesService.findById(dto.roleId);
 
-    const membership = this.membershipsRepository.create({
-      userId: dto.userId,
-      tenantId: dto.tenantId,
-      roleId: dto.roleId,
-      status: (dto.status as MembershipStatus) ?? MembershipStatus.ACTIVE,
-      joinedAt: new Date(),
-    });
+    let saved: Membership;
 
-    const saved = await this.membershipsRepository.save(membership);
+    if (existing) {
+      if (existing.status !== MembershipStatus.REMOVED) {
+        throw new ConflictException(
+          `User ${dto.userId} already has an active membership in tenant ${dto.tenantId}`,
+        );
+      }
+      // Restore the soft-deleted record with the new role
+      existing.roleId = dto.roleId;
+      existing.status = (dto.status as MembershipStatus) ?? MembershipStatus.ACTIVE;
+      existing.joinedAt = new Date();
+      saved = await this.membershipsRepository.save(existing);
+    } else {
+      const membership = this.membershipsRepository.create({
+        userId: dto.userId,
+        tenantId: dto.tenantId,
+        roleId: dto.roleId,
+        status: (dto.status as MembershipStatus) ?? MembershipStatus.ACTIVE,
+        joinedAt: new Date(),
+      });
+      saved = await this.membershipsRepository.save(membership);
+    }
 
     // Publish tenant.user-added event
-    if (this.client) {
-      this.client
-        .emit('tenant.user-added', {
-          tenantId: dto.tenantId,
-          userId: dto.userId,
-          role: role.name,
-          timestamp: new Date().toISOString(),
-        })
-        .subscribe({
-          error: (err: Error) =>
-            this.logger.warn(
-              `Failed to publish tenant.user-added: ${err.message}`,
-            ),
-        });
-    }
+    this.rabbitMqPublisher.publish('chassis.tenants', 'tenant.user-added', {
+      tenantId: dto.tenantId,
+      userId: dto.userId,
+      role: role.name,
+      timestamp: new Date().toISOString(),
+    });
 
     this.logger.log(
       `Created membership for user ${dto.userId} in tenant ${dto.tenantId} with role ${role.name}`,

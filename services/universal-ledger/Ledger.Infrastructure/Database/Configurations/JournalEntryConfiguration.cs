@@ -27,6 +27,8 @@ public class JournalEntryConfiguration : IEntityTypeConfiguration<JournalEntry>
         builder.Property(e => e.ReversedById).HasColumnName("reversed_by_id");
         builder.Property(e => e.ReversalOfId).HasColumnName("reversal_of_id");
         builder.Property(e => e.SourceModule).HasColumnName("source_module").HasMaxLength(100);
+        builder.Property(e => e.EntryNumber).HasColumnName("entry_number").ValueGeneratedOnAdd();
+        builder.Property(e => e.Tags).HasColumnName("tags").HasColumnType("jsonb").HasDefaultValue("[]");
         builder.Property(e => e.CreatedAt).HasColumnName("created_at");
         builder.Property(e => e.UpdatedAt).HasColumnName("updated_at");
 

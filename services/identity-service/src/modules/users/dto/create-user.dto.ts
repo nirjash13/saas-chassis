@@ -1,5 +1,4 @@
 import {
-  IsBoolean,
   IsEmail,
   IsNotEmpty,
   IsOptional,
@@ -34,12 +33,4 @@ export class CreateUserDto {
   @IsOptional()
   @MaxLength(20)
   phone?: string;
-
-  @IsBoolean()
-  @IsOptional()
-  isPlatformAdmin?: boolean;
-
-  @IsBoolean()
-  @IsOptional()
-  emailVerified?: boolean;
 }

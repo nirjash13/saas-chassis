@@ -108,4 +108,9 @@ export class SubscriptionsService {
     await this.subscriptionRepo.update({ tenantId }, { status });
     this.logger.log(`Updated subscription status for tenant ${tenantId} → ${status}`);
   }
+
+  async linkStripeCustomerId(tenantId: string, stripeCustomerId: string): Promise<void> {
+    await this.subscriptionRepo.update({ tenantId }, { stripeCustomerId });
+    this.logger.log(`Linked Stripe customer ${stripeCustomerId} to tenant ${tenantId}`);
+  }
 }

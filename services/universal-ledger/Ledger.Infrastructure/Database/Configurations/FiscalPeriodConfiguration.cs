@@ -28,5 +28,6 @@ public class FiscalPeriodConfiguration : IEntityTypeConfiguration<FiscalPeriod>
         builder.Property(p => p.UpdatedAt).HasColumnName("updated_at");
 
         builder.HasIndex(p => p.TenantId).HasDatabaseName("idx_fiscal_periods_tenant");
+        builder.HasIndex(p => new { p.TenantId, p.StartDate, p.EndDate }).IsUnique().HasDatabaseName("uq_fiscal_periods_tenant_dates");
     }
 }

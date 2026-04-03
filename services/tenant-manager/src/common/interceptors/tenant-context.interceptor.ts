@@ -8,16 +8,7 @@ import {
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { Request } from 'express';
-
-export interface JwtPayload {
-  sub: string;
-  email: string;
-  tenantId?: string | null;
-  isPlatformAdmin: boolean;
-  roles?: string[];
-  isImpersonating?: boolean;
-  realUserId?: string;
-}
+import { JwtPayload } from '../../modules/auth/jwt.strategy';
 
 /**
  * Interceptor that extracts tenant context from the incoming request and

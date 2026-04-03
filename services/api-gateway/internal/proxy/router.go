@@ -45,6 +45,17 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config, redisClient *redis.Client, l
 		}
 	}
 
+	// Internal service-to-service routes — validated by X-Service-Token header
+	internal := r.Group("/internal")
+	internal.Use(middleware.InternalAuthMiddleware(cfg.InternalServiceToken))
+	{
+		internal.Any("/identity/*path", proxyTo(cfg.IdentityServiceURL, logger))
+		internal.Any("/tenants/*path", proxyTo(cfg.TenantManagerURL, logger))
+		internal.Any("/billing/*path", proxyTo(cfg.BillingEngineURL, logger))
+		internal.Any("/ledger/*path", proxyTo(cfg.LedgerServiceURL, logger))
+		internal.Any("/audit/*path", proxyTo(cfg.AuditServiceURL, logger))
+	}
+
 	// Webhook routes — signature verified by billing service, not JWT
 	webhooks := r.Group("/webhooks")
 	{

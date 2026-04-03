@@ -43,7 +43,9 @@ export class ResponseEnvelopeInterceptor<T>
           requestId:
             (req.headers['x-request-id'] as string) || uuidv4(),
           timestamp: new Date().toISOString(),
-          ...(data?.pagination || {}),
+          ...(data?.pagination
+            ? { pagination: data.pagination }
+            : {}),
         },
       })),
     );

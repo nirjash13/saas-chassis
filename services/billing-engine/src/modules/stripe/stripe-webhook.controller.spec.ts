@@ -6,6 +6,7 @@ import { StripeService } from './stripe.service';
 import { WebhookEvent } from './entities/webhook-event.entity';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { InvoicesService } from '../invoices/invoices.service';
+import { RabbitMqPublisherService } from '../../common/messaging/rabbitmq-publisher.service';
 
 const mockWebhookRepo = {
   findOne: jest.fn(),
@@ -34,8 +35,8 @@ const mockConfigService = {
   get: jest.fn().mockReturnValue('test-secret'),
 };
 
-const mockRabbitClient = {
-  emit: jest.fn().mockReturnValue({ subscribe: jest.fn() }),
+const mockRabbitMqPublisher = {
+  publish: jest.fn(),
 };
 
 describe('StripeWebhookController', () => {
@@ -50,7 +51,7 @@ describe('StripeWebhookController', () => {
         { provide: SubscriptionsService, useValue: mockSubscriptionsService },
         { provide: InvoicesService, useValue: mockInvoicesService },
         { provide: getRepositoryToken(WebhookEvent), useValue: mockWebhookRepo },
-        { provide: 'RABBITMQ_CLIENT', useValue: mockRabbitClient },
+        { provide: RabbitMqPublisherService, useValue: mockRabbitMqPublisher },
       ],
     }).compile();
 
@@ -160,8 +161,9 @@ describe('StripeWebhookController', () => {
         }),
       );
 
-      expect(mockRabbitClient.emit).toHaveBeenCalledWith(
-        'billing-synced',
+      expect(mockRabbitMqPublisher.publish).toHaveBeenCalledWith(
+        'chassis.tenants',
+        'billing.synced',
         expect.objectContaining({ tenantId: 'tenant-uuid', stripeCustomerId: 'cus_abc123' }),
       );
     });

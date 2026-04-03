@@ -1,13 +1,9 @@
 using System.Text;
 using System.Text.Json;
+using Ledger.Application.Interfaces;
 using RabbitMQ.Client;
 
 namespace Ledger.Infrastructure.Messaging;
-
-public interface IEventPublisher
-{
-    Task PublishAsync<T>(string exchange, string routingKey, T @event, CancellationToken ct = default);
-}
 
 public class RabbitMqPublisher : IEventPublisher, IDisposable
 {

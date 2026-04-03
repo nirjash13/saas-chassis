@@ -2,6 +2,7 @@ using Ledger.Domain.Entities;
 using Ledger.Domain.Enums;
 using Ledger.Domain.Exceptions;
 using Ledger.Domain.Interfaces;
+using Ledger.Application.Interfaces;
 using MediatR;
 
 namespace Ledger.Application.Commands.CloseFiscalPeriod;
@@ -11,12 +12,14 @@ public class CloseFiscalPeriodHandler : IRequestHandler<CloseFiscalPeriodCommand
     private readonly IFiscalPeriodRepository _periods;
     private readonly IJournalEntryRepository _entries;
     private readonly IAccountRepository _accounts;
+    private readonly IEventPublisher? _publisher;
 
-    public CloseFiscalPeriodHandler(IFiscalPeriodRepository periods, IJournalEntryRepository entries, IAccountRepository accounts)
+    public CloseFiscalPeriodHandler(IFiscalPeriodRepository periods, IJournalEntryRepository entries, IAccountRepository accounts, IEventPublisher? publisher = null)
     {
         _periods = periods;
         _entries = entries;
         _accounts = accounts;
+        _publisher = publisher;
     }
 
     public async Task Handle(CloseFiscalPeriodCommand request, CancellationToken cancellationToken)
@@ -32,7 +35,7 @@ public class CloseFiscalPeriodHandler : IRequestHandler<CloseFiscalPeriodCommand
             request.TenantId,
             period.StartDate,
             period.EndDate,
-            cancellationToken: cancellationToken);
+            ct: cancellationToken);
 
         // 2. Verify no draft entries remain
         var draftCount = periodEntries.Count(e => e.Status == EntryStatus.Draft);
@@ -99,6 +102,63 @@ public class CloseFiscalPeriodHandler : IRequestHandler<CloseFiscalPeriodCommand
 
         // 7. Close the period
         period.Close(request.ClosedByUserId);
+
+        // 8. Build opening balance entry for the next period (balance sheet accounts only)
+        //    Revenue and Expense accounts were zeroed by the closing entry above.
+        var nextPeriodStart = period.EndDate.AddDays(1);
+        var openingEntry = JournalEntry.Create(
+            request.TenantId,
+            nextPeriodStart,
+            $"Opening Balance: {period.Name}",
+            null,
+            null,
+            "period_open");
+
+        foreach (var account in allAccounts.Where(a => a.IsActive &&
+            (a.AccountType == AccountType.Asset ||
+             a.AccountType == AccountType.Liability ||
+             a.AccountType == AccountType.Equity)))
+        {
+            if (!accountBalances.TryGetValue(account.Id, out var balance)) continue;
+
+            var netBalance = balance.TotalDebits - balance.TotalCredits;
+
+            // Asset (debit-normal): positive net debit carried forward as debit
+            // Liability/Equity (credit-normal): positive net credit carried forward as credit
+            if (account.AccountType == AccountType.Asset)
+            {
+                if (netBalance > 0)
+                    openingEntry.AddLine(account.Id, netBalance, 0m, $"Opening balance: {account.Name}");
+                else if (netBalance < 0)
+                    openingEntry.AddLine(account.Id, 0m, -netBalance, $"Opening balance: {account.Name}");
+            }
+            else
+            {
+                var creditNet = balance.TotalCredits - balance.TotalDebits;
+                if (creditNet > 0)
+                    openingEntry.AddLine(account.Id, 0m, creditNet, $"Opening balance: {account.Name}");
+                else if (creditNet < 0)
+                    openingEntry.AddLine(account.Id, -creditNet, 0m, $"Opening balance: {account.Name}");
+            }
+        }
+
+        if (openingEntry.Lines.Any() && openingEntry.IsBalanced)
+        {
+            openingEntry.Post(request.ClosedByUserId);
+            await _entries.AddAsync(openingEntry, cancellationToken);
+            period.SetOpeningBalanceEntry(openingEntry.Id);
+        }
+
         await _entries.SaveChangesAsync(cancellationToken);
+
+        if (_publisher != null)
+        {
+            await _publisher.PublishAsync("chassis.ledger", "fiscal_period.closed", new {
+                TenantId = period.TenantId,
+                PeriodId = period.Id,
+                ClosedByUserId = request.ClosedByUserId,
+                ClosedAt = DateTime.UtcNow
+            }, cancellationToken);
+        }
     }
 }

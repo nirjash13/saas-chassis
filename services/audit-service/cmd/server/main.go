@@ -10,7 +10,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
-	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/rs/zerolog"
 	"github.com/your-org/saas-chassis/audit-service/internal/config"
 	"github.com/your-org/saas-chassis/audit-service/internal/consumer"
@@ -36,39 +35,27 @@ func main() {
 	}
 	logger.Info().Msg("connected to postgres")
 
-	// RabbitMQ connection
-	conn, err := amqp.Dial(cfg.RabbitMQURL)
-	if err != nil {
-		logger.Fatal().Err(err).Msg("failed to connect to rabbitmq")
-	}
-	defer conn.Close()
-
-	ch, err := conn.Channel()
-	if err != nil {
-		logger.Fatal().Err(err).Msg("failed to open rabbitmq channel")
-	}
-	defer ch.Close()
-
-	// Prefetch up to 100 messages before requiring acks
-	if err := ch.Qos(100, 0, false); err != nil {
-		logger.Fatal().Err(err).Msg("failed to set channel QoS")
-	}
-
-	if err := consumer.Setup(ch); err != nil {
-		logger.Fatal().Err(err).Msg("failed to setup rabbitmq topology")
-	}
-	logger.Info().Msg("connected to rabbitmq")
-
 	repo := repository.NewAuditRepository(pool, logger)
 
 	// Background workers
-	go consumer.StartConsumer(ch, repo, logger)
+	go consumer.StartWithReconnect(ctx, cfg.RabbitMQURL, repo, logger)
 	go healthcheck.RunHealthChecker(pool, logger)
 
 	// HTTP server
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(gin.Recovery())
+	r.Use(func(c *gin.Context) {
+		start := time.Now()
+		c.Next()
+		logger.Info().
+			Str("method", c.Request.Method).
+			Str("path", c.Request.URL.Path).
+			Int("status", c.Writer.Status()).
+			Dur("latency", time.Since(start)).
+			Str("ip", c.ClientIP()).
+			Msg("request")
+	})
 
 	r.GET("/health", handler.SelfHealth())
 

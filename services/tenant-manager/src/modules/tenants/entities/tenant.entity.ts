@@ -8,7 +8,7 @@ import {
 } from 'typeorm';
 import { TenantFeature } from '../../features/entities/tenant-feature.entity';
 
-export type TenantStatus = 'provisioning' | 'active' | 'suspended' | 'cancelled';
+export type TenantStatus = 'provisioning' | 'active' | 'suspended' | 'cancelled' | 'past_due' | 'archived';
 
 @Entity({ name: 'tenants', schema: 'tenant_mgmt' })
 export class Tenant {

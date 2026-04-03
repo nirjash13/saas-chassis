@@ -1,4 +1,5 @@
 using Ledger.Domain.Interfaces;
+using Ledger.Application.Interfaces;
 using MediatR;
 
 namespace Ledger.Application.Commands.PostJournalEntry;
@@ -6,8 +7,13 @@ namespace Ledger.Application.Commands.PostJournalEntry;
 public class PostJournalEntryHandler : IRequestHandler<PostJournalEntryCommand>
 {
     private readonly IJournalEntryRepository _entries;
+    private readonly IEventPublisher? _publisher;
 
-    public PostJournalEntryHandler(IJournalEntryRepository entries) => _entries = entries;
+    public PostJournalEntryHandler(IJournalEntryRepository entries, IEventPublisher? publisher = null)
+    {
+        _entries = entries;
+        _publisher = publisher;
+    }
 
     public async Task Handle(PostJournalEntryCommand request, CancellationToken cancellationToken)
     {
@@ -16,5 +22,15 @@ public class PostJournalEntryHandler : IRequestHandler<PostJournalEntryCommand>
 
         entry.Post(request.PostedByUserId);
         await _entries.SaveChangesAsync(cancellationToken);
+
+        if (_publisher != null)
+        {
+            await _publisher.PublishAsync("chassis.ledger", "journal_entry.posted", new {
+                TenantId = entry.TenantId,
+                EntryId = entry.Id,
+                TotalDebits = entry.TotalDebits,
+                PostedAt = entry.PostedAt
+            }, cancellationToken);
+        }
     }
 }

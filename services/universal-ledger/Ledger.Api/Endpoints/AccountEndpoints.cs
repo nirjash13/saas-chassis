@@ -17,8 +17,22 @@ public static class AccountEndpoints
         {
             var tenantId = GetTenantId(ctx);
             var all = await accounts.GetAllByTenantAsync(tenantId);
-            var dtos = all.Select(ToDto).ToList();
-            return Results.Ok(dtos);
+
+            var dtoMap = all.ToDictionary(a => a.Id, a => new AccountDto(
+                a.Id, a.TenantId, a.Code, a.Name, a.AccountType, a.ParentId, a.IsActive, a.Description,
+                new List<AccountDto>()
+            ));
+
+            var roots = new List<AccountDto>();
+            foreach (var dto in dtoMap.Values)
+            {
+                if (dto.ParentId.HasValue && dtoMap.TryGetValue(dto.ParentId.Value, out var parent))
+                    parent.Children!.Add(dto);
+                else
+                    roots.Add(dto);
+            }
+
+            return Results.Ok(roots);
         });
 
         group.MapPost("/", async (CreateAccountRequest req, IMediator mediator, HttpContext ctx) =>

@@ -2,6 +2,7 @@ import { Controller, Get, Inject, Optional } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import Redis from 'ioredis';
+import { RabbitMqPublisherService } from '../common/messaging/rabbitmq-publisher.service';
 
 interface HealthStatus {
   status: 'ok' | 'degraded' | 'error';
@@ -11,6 +12,7 @@ interface HealthStatus {
   checks: {
     database: 'ok' | 'error';
     redis: 'ok' | 'error';
+    rabbitmq: 'ok' | 'error';
   };
 }
 
@@ -21,6 +23,7 @@ export class HealthController {
     private readonly dataSource: DataSource,
     @Optional() @Inject('REDIS_CLIENT')
     private readonly redis: Redis | null,
+    private readonly rabbitMqPublisher: RabbitMqPublisherService,
   ) {}
 
   @Get()
@@ -44,8 +47,10 @@ export class HealthController {
       redisStatus = 'error';
     }
 
+    const rabbitmqStatus: 'ok' | 'error' = this.rabbitMqPublisher.isConnected() ? 'ok' : 'error';
+
     const overallStatus =
-      dbStatus === 'ok' && redisStatus === 'ok' ? 'ok' : 'degraded';
+      dbStatus === 'ok' && redisStatus === 'ok' && rabbitmqStatus === 'ok' ? 'ok' : 'degraded';
 
     return {
       status: overallStatus,
@@ -55,6 +60,7 @@ export class HealthController {
       checks: {
         database: dbStatus,
         redis: redisStatus,
+        rabbitmq: rabbitmqStatus,
       },
     };
   }

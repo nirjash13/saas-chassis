@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
@@ -9,6 +9,7 @@ export interface JwtPayload {
   tenantId?: string | null;
   isPlatformAdmin: boolean;
   roles?: string[];
+  permissions?: string[];
   isImpersonating?: boolean;
   realUserId?: string;
   iat?: number;
@@ -17,13 +18,17 @@ export interface JwtPayload {
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
+  private static readonly logger = new Logger(JwtStrategy.name);
+
   constructor(private readonly configService: ConfigService) {
+    const secret = configService.get<string>('app.jwt.secret');
+    if (!secret) {
+      throw new Error('JWT_SECRET is not configured. Set the JWT_SECRET environment variable.');
+    }
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey:
-        configService.get<string>('app.jwt.secret') ??
-        'changeme-super-secret-at-least-32-chars!!',
+      secretOrKey: secret,
     });
   }
 

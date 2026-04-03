@@ -10,6 +10,88 @@ import (
 	"github.com/your-org/saas-chassis/audit-service/internal/repository"
 )
 
+// StartWithReconnect runs StartConsumer in a loop, reconnecting on failure.
+// It dials a fresh AMQP connection and channel on each attempt so that a
+// broker restart or network blip is recovered automatically.
+func StartWithReconnect(ctx context.Context, rabbitURL string, repo *repository.AuditRepository, logger zerolog.Logger) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		conn, err := amqp.Dial(rabbitURL)
+		if err != nil {
+			logger.Error().Err(err).Msg("rabbitmq dial failed, retrying in 5s")
+			select {
+			case <-time.After(5 * time.Second):
+			case <-ctx.Done():
+				return
+			}
+			continue
+		}
+
+		ch, err := conn.Channel()
+		if err != nil {
+			conn.Close()
+			logger.Error().Err(err).Msg("rabbitmq channel open failed, retrying in 5s")
+			select {
+			case <-time.After(5 * time.Second):
+			case <-ctx.Done():
+				return
+			}
+			continue
+		}
+
+		if err := ch.Qos(100, 0, false); err != nil {
+			ch.Close()
+			conn.Close()
+			logger.Error().Err(err).Msg("rabbitmq QoS failed, retrying in 5s")
+			select {
+			case <-time.After(5 * time.Second):
+			case <-ctx.Done():
+				return
+			}
+			continue
+		}
+
+		if err := Setup(ch); err != nil {
+			ch.Close()
+			conn.Close()
+			logger.Error().Err(err).Msg("rabbitmq topology setup failed, retrying in 5s")
+			select {
+			case <-time.After(5 * time.Second):
+			case <-ctx.Done():
+				return
+			}
+			continue
+		}
+
+		logger.Info().Msg("rabbitmq connection established")
+
+		// StartConsumer blocks until the channel closes.
+		StartConsumer(ch, repo, logger)
+
+		ch.Close()
+		conn.Close()
+
+		// Channel was closed — check if shutdown was requested.
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		logger.Error().Msg("rabbitmq consumer exited, reconnecting in 5s")
+		select {
+		case <-time.After(5 * time.Second):
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
 // Setup declares the chassis.audit fanout exchange and binds the audit.log-entry queue.
 func Setup(ch *amqp.Channel) error {
 	if err := ch.ExchangeDeclare(
@@ -49,6 +131,7 @@ func StartConsumer(ch *amqp.Channel, repo *repository.AuditRepository, logger ze
 	}
 
 	batch := make([]repository.AuditEvent, 0, 100)
+	pending := make([]amqp.Delivery, 0, 100)
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
@@ -60,8 +143,16 @@ func StartConsumer(ch *amqp.Channel, repo *repository.AuditRepository, logger ze
 		defer cancel()
 		if err := repo.BatchInsert(ctx, batch); err != nil {
 			logger.Error().Err(err).Int("count", len(batch)).Msg("audit batch insert failed")
+			for i := range pending {
+				pending[i].Nack(false, true) // requeue on failure
+			}
+		} else {
+			for i := range pending {
+				pending[i].Ack(false) // ack only after successful insert
+			}
 		}
 		batch = batch[:0]
+		pending = pending[:0]
 	}
 
 	logger.Info().Msg("audit consumer started")
@@ -83,7 +174,7 @@ func StartConsumer(ch *amqp.Channel, repo *repository.AuditRepository, logger ze
 			}
 
 			batch = append(batch, event)
-			msg.Ack(false)
+			pending = append(pending, msg)
 
 			if len(batch) >= 100 {
 				flush()

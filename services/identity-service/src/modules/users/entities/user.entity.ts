@@ -1,3 +1,4 @@
+import { Exclude } from 'class-transformer';
 import {
   Column,
   CreateDateColumn,
@@ -19,6 +20,7 @@ export class User {
   @Column({ name: 'email_verified', type: 'boolean', default: false })
   emailVerified!: boolean;
 
+  @Exclude()
   @Column({ name: 'password_hash', type: 'varchar', length: 255 })
   passwordHash!: string;
 

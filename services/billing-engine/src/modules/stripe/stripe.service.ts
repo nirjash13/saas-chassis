@@ -27,6 +27,7 @@ export class StripeService {
   async createCheckoutSession(
     stripeCustomerId: string,
     tenantId: string,
+    priceId: string,
   ): Promise<string> {
     const successUrl = this.configService.get<string>('app.stripe.successUrl')!;
     const cancelUrl = this.configService.get<string>('app.stripe.cancelUrl')!;
@@ -38,9 +39,12 @@ export class StripeService {
       metadata: { tenantId },
       success_url: `${successUrl}?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: cancelUrl,
-      // Price IDs should be passed in from a real integration;
-      // left as a placeholder for the chassis scaffold
-      line_items: [],
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
     });
 
     this.logger.log(`Created checkout session ${session.id} for customer ${stripeCustomerId}`);

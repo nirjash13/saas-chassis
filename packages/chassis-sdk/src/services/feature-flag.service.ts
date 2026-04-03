@@ -6,6 +6,16 @@ export class FeatureFlagService {
   private readonly logger = new Logger(FeatureFlagService.name);
   private readonly cache = new Map<string, { value: boolean; expiresAt: number }>();
   private readonly cacheTtlMs = 60_000; // 1 minute
+  private readonly MAX_CACHE_SIZE = 1000;
+
+  private setCacheEntry(key: string, value: { value: boolean; expiresAt: number }): void {
+    if (this.cache.size >= this.MAX_CACHE_SIZE) {
+      // Evict the oldest entry (first key in insertion order)
+      const firstKey = this.cache.keys().next().value;
+      this.cache.delete(firstKey);
+    }
+    this.cache.set(key, value);
+  }
 
   constructor(
     @Optional()
@@ -44,7 +54,7 @@ export class FeatureFlagService {
       const body = (await response.json()) as { data?: { isEnabled?: boolean } };
       const enabled = body?.data?.isEnabled ?? false;
 
-      this.cache.set(cacheKey, {
+      this.setCacheEntry(cacheKey, {
         value: enabled,
         expiresAt: Date.now() + this.cacheTtlMs,
       });

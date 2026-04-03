@@ -18,12 +18,11 @@ public class GetGeneralLedgerHandler : IRequestHandler<GetGeneralLedgerQuery, Li
 
     public async Task<List<JournalEntryDto>> Handle(GetGeneralLedgerQuery request, CancellationToken cancellationToken)
     {
-        var entries = await _entries.GetByTenantAsync(request.TenantId, request.FromDate, request.ToDate, EntryStatus.Posted, cancellationToken);
+        var entries = await _entries.GetByTenantAsync(request.TenantId, request.FromDate, request.ToDate, EntryStatus.Posted, request.AccountId, cancellationToken);
         var accounts = await _accounts.GetAllByTenantAsync(request.TenantId, cancellationToken);
         var accountMap = accounts.ToDictionary(a => a.Id);
 
         return entries
-            .Where(e => e.Lines.Any(l => l.AccountId == request.AccountId))
             .OrderBy(e => e.EntryDate)
             .Select(e => new JournalEntryDto(
                 e.Id,

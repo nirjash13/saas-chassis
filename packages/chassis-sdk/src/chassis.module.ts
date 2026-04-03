@@ -20,6 +20,8 @@ export class ChassisModule {
         AuditPublisherService,
         InternalHttpService,
         { provide: APP_GUARD, useClass: JwtAuthGuard },
+        { provide: 'FEATURE_FLAG_CHECKER', useExisting: FeatureFlagService },
+        { provide: 'AUDIT_PUBLISHER', useExisting: AuditPublisherService },
       ],
       exports: [
         'CHASSIS_OPTIONS',

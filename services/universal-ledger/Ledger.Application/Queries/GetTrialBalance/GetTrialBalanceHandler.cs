@@ -20,7 +20,7 @@ public class GetTrialBalanceHandler : IRequestHandler<GetTrialBalanceQuery, Tria
     {
         var asOfDate = request.AsOfDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
         var accounts = await _accounts.GetAllByTenantAsync(request.TenantId, cancellationToken);
-        var entries = await _entries.GetByTenantAsync(request.TenantId, toDate: asOfDate, status: EntryStatus.Posted, cancellationToken: cancellationToken);
+        var entries = await _entries.GetByTenantAsync(request.TenantId, toDate: asOfDate, status: EntryStatus.Posted, ct: cancellationToken);
 
         var balances = entries
             .SelectMany(e => e.Lines)

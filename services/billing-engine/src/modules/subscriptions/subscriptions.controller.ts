@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   ForbiddenException,
   Get,
@@ -13,6 +14,8 @@ import { SubscriptionsService } from './subscriptions.service';
 import { StripeService } from '../stripe/stripe.service';
 import { ApiResponseDto } from '../../common/dto/api-response.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { TenantContextInterceptor } from '../../common/interceptors/tenant-context.interceptor';
 import { JwtPayload } from '../auth/jwt.strategy';
 
@@ -20,8 +23,12 @@ interface RequestWithUser extends Request {
   user: JwtPayload;
 }
 
+interface CreateCheckoutDto {
+  priceId: string;
+}
+
 @Controller('api/v1/billing')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 @UseInterceptors(TenantContextInterceptor)
 export class SubscriptionsController {
   constructor(
@@ -34,6 +41,7 @@ export class SubscriptionsController {
    * Returns the current tenant's subscription record.
    * Requires billing:read (any authenticated tenant user).
    */
+  @RequirePermissions('billing:read')
   @Get('subscription')
   async getSubscription(
     @Request() req: RequestWithUser,
@@ -51,10 +59,12 @@ export class SubscriptionsController {
    * Creates a Stripe Checkout session for plan upgrade.
    * Requires billing:manage (tenant user with sufficient role).
    */
+  @RequirePermissions('billing:manage')
   @Post('checkout')
   @HttpCode(HttpStatus.OK)
   async createCheckout(
     @Request() req: RequestWithUser,
+    @Body() body: CreateCheckoutDto,
   ): Promise<ApiResponseDto<{ url: string }>> {
     const tenantId = req.user.tenantId;
     if (!tenantId) {
@@ -65,6 +75,7 @@ export class SubscriptionsController {
     const sessionUrl = await this.stripeService.createCheckoutSession(
       subscription.stripeCustomerId,
       tenantId,
+      body.priceId,
     );
 
     return ApiResponseDto.ok({ url: sessionUrl });
@@ -75,6 +86,7 @@ export class SubscriptionsController {
    * Creates a Stripe Customer Portal session.
    * Requires billing:manage (tenant user with sufficient role).
    */
+  @RequirePermissions('billing:manage')
   @Post('portal')
   @HttpCode(HttpStatus.OK)
   async createPortal(

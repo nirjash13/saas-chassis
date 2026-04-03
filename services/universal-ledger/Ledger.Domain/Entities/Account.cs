@@ -12,6 +12,7 @@ public class Account
     public Guid? ParentId { get; private set; }
     public bool IsActive { get; private set; } = true;
     public string? Description { get; private set; }
+    public string Metadata { get; private set; } = "{}";
     public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; private set; } = DateTime.UtcNow;
 

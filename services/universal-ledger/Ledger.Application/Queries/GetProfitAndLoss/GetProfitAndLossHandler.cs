@@ -18,7 +18,7 @@ public class GetProfitAndLossHandler : IRequestHandler<GetProfitAndLossQuery, Pr
     public async Task<ProfitAndLossDto> Handle(GetProfitAndLossQuery request, CancellationToken cancellationToken)
     {
         var accounts = await _accounts.GetAllByTenantAsync(request.TenantId, cancellationToken);
-        var entries = await _entries.GetByTenantAsync(request.TenantId, request.FromDate, request.ToDate, EntryStatus.Posted, cancellationToken);
+        var entries = await _entries.GetByTenantAsync(request.TenantId, request.FromDate, request.ToDate, EntryStatus.Posted, ct: cancellationToken);
 
         // netBalance = credits - debits per account
         var balances = entries

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using FluentValidation;
 using Ledger.Domain.Exceptions;
 
 namespace Ledger.Api.Middleware;
@@ -29,6 +30,15 @@ public class ExceptionHandlingMiddleware
 
     private static async Task WriteErrorAsync(HttpContext context, Exception ex)
     {
+        if (ex is ValidationException ve)
+        {
+            var errors = ve.Errors.Select(e => e.ErrorMessage).ToList();
+            context.Response.StatusCode = 400;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsync(JsonSerializer.Serialize(new { error = "Validation failed.", code = "VALIDATION_ERROR", errors }));
+            return;
+        }
+
         var (statusCode, code, message) = ex switch
         {
             UnbalancedEntryException    => (400, "UNBALANCED_ENTRY",    ex.Message),

@@ -18,19 +18,31 @@ public class TenantContextMiddleware
 
     public async Task InvokeAsync(HttpContext context, ITenantContextAccessor tenantContextAccessor)
     {
+        // Allow health check through without gateway headers
+        if (context.Request.Path.StartsWithSegments("/health"))
+        {
+            await _next(context);
+            return;
+        }
+
         var tenantId = context.Request.Headers["X-Tenant-ID"].FirstOrDefault();
         var userId = context.Request.Headers["X-User-ID"].FirstOrDefault();
         var isPlatformAdmin = context.Request.Headers["X-Is-Platform-Admin"].FirstOrDefault() == "true";
 
-        if (!string.IsNullOrEmpty(tenantId) || isPlatformAdmin)
+        if (string.IsNullOrEmpty(tenantId) && !isPlatformAdmin)
         {
-            tenantContextAccessor.Set(new TenantContextInfo
-            {
-                TenantId = tenantId ?? "00000000-0000-0000-0000-000000000000",
-                UserId = userId ?? string.Empty,
-                IsPlatformAdmin = isPlatformAdmin,
-            });
+            context.Response.StatusCode = 401;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsync("{\"error\":\"Missing gateway context headers.\",\"code\":\"UNAUTHORIZED\"}");
+            return;
         }
+
+        tenantContextAccessor.Set(new TenantContextInfo
+        {
+            TenantId = tenantId ?? "00000000-0000-0000-0000-000000000000",
+            UserId = userId ?? string.Empty,
+            IsPlatformAdmin = isPlatformAdmin,
+        });
 
         await _next(context);
     }

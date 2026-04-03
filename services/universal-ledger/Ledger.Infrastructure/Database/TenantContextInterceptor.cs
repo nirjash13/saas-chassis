@@ -69,6 +69,9 @@ public class TenantContextInterceptor : DbCommandInterceptor
         var context = _tenantContext.Current;
         if (context == null) return;
 
+        if (!Guid.TryParse(context.TenantId, out _))
+            throw new InvalidOperationException($"Invalid tenant ID format: {context.TenantId}");
+
         var prefix = $"SET LOCAL app.current_tenant_id = '{context.TenantId}';" +
                      $"SET LOCAL app.is_platform_admin = '{context.IsPlatformAdmin.ToString().ToLower()}';\n";
 

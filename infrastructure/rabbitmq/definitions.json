@@ -2,6 +2,7 @@
   "rabbit_version": "3.13",
   "users": [
     {
+      "_comment": "WARNING: password_hash must be a proper RabbitMQ SHA-256 hash, not plaintext. Generate with: rabbitmqctl hash_password <password> or use the management UI. The value below is a placeholder and will cause authentication failures.",
       "name": "chassis",
       "password_hash": "rabbit_local_pwd",
       "hashing_algorithm": "rabbit_password_hashing_sha256",

@@ -1,10 +1,14 @@
+using FluentValidation;
 using Ledger.Api.Endpoints;
 using Ledger.Api.Middleware;
+using Ledger.Application.Behaviors;
+using Ledger.Application.Commands.CreateAccount;
 using Ledger.Application.Interfaces;
 using Ledger.Infrastructure.Database;
 using Ledger.Infrastructure.Messaging;
 using Ledger.Infrastructure.Repositories;
 using Ledger.Domain.Interfaces;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Serilog.Events;
@@ -46,6 +50,10 @@ builder.Services.AddScoped<IFiscalPeriodRepository, FiscalPeriodRepository>();
 // MediatR — scan Application assembly for handlers
 builder.Services.AddMediatR(cfg =>
     cfg.RegisterServicesFromAssembly(typeof(Ledger.Application.Commands.CreateAccount.CreateAccountCommand).Assembly));
+
+// FluentValidation — register validators and pipeline behavior
+builder.Services.AddValidatorsFromAssembly(typeof(CreateAccountCommand).Assembly);
+builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
 
 // RabbitMQ publisher (optional — skip if not configured)
 var rabbitUrl = builder.Configuration["RABBITMQ_URL"];

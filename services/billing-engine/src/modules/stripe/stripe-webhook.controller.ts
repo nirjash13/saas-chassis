@@ -5,12 +5,10 @@ import {
   RawBodyRequest,
   Req,
   Res,
-  Inject,
-  Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ClientProxy, MessagePattern, Payload } from '@nestjs/microservices';
+import { MessagePattern, Payload } from '@nestjs/microservices';
 import { Repository } from 'typeorm';
 import { Request, Response } from 'express';
 import Stripe from 'stripe';
@@ -18,6 +16,7 @@ import { StripeService } from './stripe.service';
 import { WebhookEvent } from './entities/webhook-event.entity';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { InvoicesService } from '../invoices/invoices.service';
+import { RabbitMqPublisherService } from '../../common/messaging/rabbitmq-publisher.service';
 
 interface TenantProvisionedEvent {
   tenantId: string;
@@ -37,7 +36,7 @@ export class StripeWebhookController {
     private readonly invoicesService: InvoicesService,
     @InjectRepository(WebhookEvent)
     private readonly webhookRepo: Repository<WebhookEvent>,
-    @Optional() @Inject('RABBITMQ_CLIENT') private readonly rabbitClient: ClientProxy | null,
+    private readonly rabbitMqPublisher: RabbitMqPublisherService,
   ) {}
 
   // ── HTTP: Stripe webhook endpoint ────────────────────────────────────────────
@@ -123,14 +122,10 @@ export class StripeWebhookController {
       });
 
       // 3. Notify tenant manager
-      if (this.rabbitClient) {
-        this.rabbitClient
-          .emit('billing-synced', { tenantId: msg.tenantId, stripeCustomerId: customer.id })
-          .subscribe({
-            error: (err: Error) =>
-              this.logger.warn(`Failed to publish billing-synced: ${err.message}`),
-          });
-      }
+      this.rabbitMqPublisher.publish('chassis.tenants', 'billing.synced', {
+        tenantId: msg.tenantId,
+        stripeCustomerId: customer.id,
+      });
 
       this.logger.log(`Provisioned Stripe customer ${customer.id} for tenant ${msg.tenantId}`);
     } catch (err) {
@@ -163,7 +158,7 @@ export class StripeWebhookController {
         break;
 
       case 'customer.created':
-        this.logger.debug(`Customer created: ${(event.data.object as Stripe.Customer).id}`);
+        await this.handleCustomerCreated(event.data.object as Stripe.Customer);
         break;
 
       default:
@@ -181,6 +176,13 @@ export class StripeWebhookController {
       new Date(sub.current_period_end * 1000),
     );
     await this.publishSubscriptionStatus(customerId, sub.status, null);
+
+    this.rabbitMqPublisher.publish('chassis.audit', 'billing.subscription.created', {
+      stripeSubscriptionId: sub.id,
+      stripeCustomerId: customerId,
+      status: sub.status,
+      occurredAt: new Date().toISOString(),
+    });
   }
 
   private async handleSubscriptionUpdated(sub: Stripe.Subscription): Promise<void> {
@@ -231,6 +233,15 @@ export class StripeWebhookController {
         paidAt: new Date(),
       });
 
+      this.rabbitMqPublisher.publish('chassis.audit', 'billing.payment.succeeded', {
+        stripeInvoiceId: inv.id,
+        stripeCustomerId: customerId,
+        tenantId: localSub.tenantId,
+        amountPaid: inv.amount_paid / 100,
+        currency: inv.currency,
+        occurredAt: new Date().toISOString(),
+      });
+
       // Recover from past_due on payment success
       if (localSub.status === 'past_due') {
         await this.subscriptionsService.updateStatusByTenantId(localSub.tenantId, 'active');
@@ -249,13 +260,21 @@ export class StripeWebhookController {
     }
   }
 
+  private async handleCustomerCreated(customer: Stripe.Customer): Promise<void> {
+    const tenantId = customer.metadata?.tenantId;
+    if (!tenantId) {
+      this.logger.warn(`customer.created: no tenantId in metadata for customer ${customer.id}`);
+      return;
+    }
+    await this.subscriptionsService.linkStripeCustomerId(tenantId, customer.id);
+    this.logger.log(`Linked Stripe customer ${customer.id} to tenant ${tenantId}`);
+  }
+
   private async publishSubscriptionStatus(
     stripeCustomerId: string,
     status: string,
     plan: string | null,
   ): Promise<void> {
-    if (!this.rabbitClient) return;
-
     const localSub = await this.subscriptionsService.findByStripeCustomerId(stripeCustomerId);
     if (!localSub) return;
 
@@ -265,11 +284,6 @@ export class StripeWebhookController {
     };
     if (plan) payload.plan = plan;
 
-    this.rabbitClient
-      .emit('subscription-status', payload)
-      .subscribe({
-        error: (err: Error) =>
-          this.logger.warn(`Failed to publish subscription-status: ${err.message}`),
-      });
+    this.rabbitMqPublisher.publish('chassis.billing', 'subscription.status', payload);
   }
 }

@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, Logger } from '@nestjs/common';
+import { ClassSerializerInterceptor, ValidationPipe, Logger } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
@@ -39,6 +40,9 @@ async function bootstrap() {
       },
     }),
   );
+
+  // Global serializer interceptor — strips @Exclude() fields from responses
+  app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
 
   // Global exception filter
   app.useGlobalFilters(new GlobalExceptionFilter());

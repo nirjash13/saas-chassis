@@ -4,16 +4,15 @@ import {
   Injectable,
   Logger,
   NotFoundException,
-  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { ClientProxy } from '@nestjs/microservices';
 import Redis from 'ioredis';
 import { FeatureDefinition } from './entities/feature-definition.entity';
 import { TenantFeature } from './entities/tenant-feature.entity';
 import { ToggleFeatureDto } from './dto/toggle-feature.dto';
 import { TenantFeatureToggledEvent } from '../tenants/events/tenant-provisioned.event';
+import { RabbitMqPublisherService } from '../../common/messaging/rabbitmq-publisher.service';
 
 export interface FeatureWithStatus {
   code: string;
@@ -38,7 +37,7 @@ export class FeaturesService {
     private readonly tenantFeatureRepo: Repository<TenantFeature>,
     @Inject('REDIS_CLIENT')
     private readonly redis: Redis,
-    @Optional() @Inject('RABBITMQ_CLIENT') private readonly rabbitClient: ClientProxy | null,
+    private readonly rabbitMqPublisher: RabbitMqPublisherService,
   ) {}
 
   // ─── Feature Definitions ─────────────────────────────────────────────────
@@ -159,19 +158,12 @@ export class FeaturesService {
     this.logger.debug(`Invalidated cache key: ${cacheKey}`);
 
     // Publish event
-    if (this.rabbitClient) {
-      const event = new TenantFeatureToggledEvent({
-        tenantId,
-        featureCode,
-        enabled: dto.enabled,
-      });
-      this.rabbitClient
-        .emit('tenant.feature-toggled', event)
-        .subscribe({
-          error: (err: Error) =>
-            this.logger.warn(`Failed to publish tenant.feature-toggled: ${err.message}`),
-        });
-    }
+    const event = new TenantFeatureToggledEvent({
+      tenantId,
+      featureCode,
+      enabled: dto.enabled,
+    });
+    this.rabbitMqPublisher.publish('chassis.tenants', 'tenant.feature-toggled', event);
 
     this.logger.log(
       `Feature '${featureCode}' ${dto.enabled ? 'enabled' : 'disabled'} for tenant ${tenantId}`,
@@ -210,10 +202,47 @@ export class FeaturesService {
   }
 
   /**
+   * Replace all tenant_features rows for a tenant with the new plan's feature set.
+   * Deletes existing rows and re-inserts based on the provided feature codes.
+   * Does NOT invalidate Redis — callers should call invalidateTenantFeatureCache after.
+   */
+  async replaceTenantFeatures(
+    tenantId: string,
+    featureCodes: string[],
+    enabledByUserId: string,
+  ): Promise<void> {
+    await this.tenantFeatureRepo.delete({ tenantId });
+
+    for (const featureCode of featureCodes) {
+      await this.tenantFeatureRepo.save(
+        this.tenantFeatureRepo.create({
+          tenantId,
+          featureCode,
+          isEnabled: true,
+          enabledBy: enabledByUserId,
+        }),
+      );
+    }
+
+    this.logger.log(
+      `Replaced tenant_features for tenant ${tenantId}: [${featureCodes.join(', ')}]`,
+    );
+  }
+
+  /**
    * Invalidate all cached features for a tenant (e.g. after plan change).
    */
   async invalidateTenantFeatureCache(tenantId: string): Promise<void> {
-    const keys = await this.redis.keys(`feature:${tenantId}:*`);
+    const keys: string[] = [];
+    let cursor = 0;
+    do {
+      const [nextCursor, batch] = await this.redis.scan(
+        cursor, 'MATCH', `feature:${tenantId}:*`, 'COUNT', 100,
+      );
+      cursor = parseInt(nextCursor);
+      keys.push(...batch);
+    } while (cursor !== 0);
+
     if (keys.length > 0) {
       await this.redis.del(...keys);
       this.logger.debug(`Invalidated ${keys.length} cache keys for tenant ${tenantId}`);

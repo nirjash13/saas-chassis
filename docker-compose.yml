@@ -23,11 +23,12 @@ services:
     image: redis:7-alpine
     container_name: chassis-redis
     restart: unless-stopped
-    command: redis-server --requirepass ${REDIS_PASSWORD}
+    command: redis-server /usr/local/etc/redis/redis.conf --requirepass ${REDIS_PASSWORD}
     ports:
       - "${REDIS_PORT:-6379}:6379"
     volumes:
       - chassis_redis_data:/data
+      - ./infrastructure/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 5s
@@ -213,6 +214,12 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   audit-service:
     build:
@@ -236,6 +243,28 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+
+  flyway:
+    image: flyway/flyway:10-alpine
+    container_name: chassis-flyway
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./migrations/iam:/flyway/sql/iam
+      - ./migrations/billing:/flyway/sql/billing
+      - ./migrations/tenants:/flyway/sql/tenants
+      - ./migrations/ledger:/flyway/sql/ledger
+    environment:
+      - FLYWAY_URL=jdbc:postgresql://postgres:5432/${POSTGRES_DB:-saas_chassis}
+      - FLYWAY_USER=${POSTGRES_USER}
+      - FLYWAY_PASSWORD=${POSTGRES_PASSWORD}
+      - FLYWAY_SCHEMAS=iam,billing,tenant_mgmt,ledger
+      - FLYWAY_LOCATIONS=filesystem:/flyway/sql
+      - FLYWAY_CONNECT_RETRIES=5
+    command: migrate
+    profiles:
+      - migrate
 
 volumes:
   chassis_pgdata:

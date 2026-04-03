@@ -53,20 +53,21 @@ export class TenantAwareRepository<T extends ObjectLiteral> {
     fn: (qr: QueryRunner) => Promise<R>,
   ): Promise<R> {
     const context = tenantStorage.getStore();
+    if (!context) {
+      throw new Error('TenantAwareRepository: No tenant context found. Ensure TenantContextMiddleware is applied.');
+    }
     const queryRunner = this.dataSource.createQueryRunner();
 
     try {
       await queryRunner.connect();
       await queryRunner.startTransaction();
 
-      if (context) {
-        await queryRunner.query(`SET LOCAL app.current_tenant_id = $1`, [
-          context.tenantId,
-        ]);
-        await queryRunner.query(`SET LOCAL app.is_platform_admin = $1`, [
-          String(context.isPlatformAdmin),
-        ]);
-      }
+      await queryRunner.query(`SET LOCAL app.current_tenant_id = $1`, [
+        context.tenantId,
+      ]);
+      await queryRunner.query(`SET LOCAL app.is_platform_admin = $1`, [
+        String(context.isPlatformAdmin),
+      ]);
 
       const result = await fn(queryRunner);
       await queryRunner.commitTransaction();

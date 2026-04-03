@@ -23,11 +23,13 @@ public class AccountConfiguration : IEntityTypeConfiguration<Account>
         builder.Property(a => a.ParentId).HasColumnName("parent_id");
         builder.Property(a => a.IsActive).HasColumnName("is_active").HasDefaultValue(true);
         builder.Property(a => a.Description).HasColumnName("description");
+        builder.Property(a => a.Metadata).HasColumnName("metadata").HasColumnType("jsonb").HasDefaultValue("{}");
         builder.Property(a => a.CreatedAt).HasColumnName("created_at");
         builder.Property(a => a.UpdatedAt).HasColumnName("updated_at");
 
         builder.HasOne(a => a.Parent).WithMany(a => a.Children).HasForeignKey(a => a.ParentId).IsRequired(false);
         builder.HasIndex(a => a.TenantId).HasDatabaseName("idx_accounts_tenant");
+        builder.HasIndex(a => new { a.TenantId, a.Code }).IsUnique().HasDatabaseName("uq_accounts_tenant_code");
     }
 }
 
