@@ -6,14 +6,14 @@ A reusable, multi-tenant backend platform that any SaaS product can plug into. I
 
 The platform consists of six microservices built with different languages and frameworks, all working together:
 
-| Service | Language | Port | Purpose |
-|---------|----------|------|---------|
-| **Identity Service** | TypeScript / NestJS | 3001 | Authentication, JWT tokens, roles & permissions, user impersonation |
-| **Tenant Manager** | TypeScript / NestJS | 3002 | Create and manage tenants (organizations), feature flags, subscription plans |
-| **Billing Engine** | TypeScript / NestJS | 3003 | Stripe integration, subscription lifecycle, invoices, revenue analytics |
-| **API Gateway** | Go / Gin | 8080 | Single entry point for all requests, JWT validation, rate limiting |
-| **Audit Service** | Go | 3005 | High-throughput immutable event log, searchable per tenant |
-| **Universal Ledger** | C# / .NET 8 | 3006 | Double-entry bookkeeping for financial tracking |
+| Service              | Language            | Port | Purpose                                                                      |
+| -------------------- | ------------------- | ---- | ---------------------------------------------------------------------------- |
+| **Identity Service** | TypeScript / NestJS | 3001 | Authentication, JWT tokens, roles & permissions, user impersonation          |
+| **Tenant Manager**   | TypeScript / NestJS | 3002 | Create and manage tenants (organizations), feature flags, subscription plans |
+| **Billing Engine**   | TypeScript / NestJS | 3003 | Stripe integration, subscription lifecycle, invoices, revenue analytics      |
+| **API Gateway**      | Go / Gin            | 8080 | Single entry point for all requests, JWT validation, rate limiting           |
+| **Audit Service**    | Go                  | 3005 | High-throughput immutable event log, searchable per tenant                   |
+| **Universal Ledger** | C# / .NET 8         | 3006 | Double-entry bookkeeping for financial tracking                              |
 
 All requests from client applications go through the **API Gateway** on port 8080. The individual service ports are for direct backend-to-backend communication.
 
@@ -27,6 +27,7 @@ All requests from client applications go through the **API Gateway** on port 808
 ### The Chassis SDK
 
 Your product's NestJS backend imports `@saas-chassis/sdk` (an npm package) to automatically get:
+
 - Multi-tenancy with RLS
 - JWT authentication guards
 - Audit logging decorators
@@ -78,6 +79,7 @@ make health
 ```
 
 The entire stack will be running. Visit the URLs below to verify:
+
 - **API Gateway:** http://localhost:8080
 - **RabbitMQ Management UI:** http://localhost:15672 (guest / guest)
 - **Seq (logs):** http://localhost:5342
@@ -137,7 +139,7 @@ npm install @saas-chassis/sdk @nestjs/core @nestjs/common typeorm pg
 
 ```typescript
 // app.module.ts
-import { ChassisModule } from '@saas-chassis/sdk';
+import { ChassisModule } from "@saas-chassis/sdk";
 
 @Module({
   imports: [
@@ -155,15 +157,19 @@ export class AppModule {}
 ### Step 3: Use SDK Guards and Decorators
 
 ```typescript
-import { CurrentUser, RequirePermission, RequireFeature } from '@saas-chassis/sdk';
+import {
+  CurrentUser,
+  RequirePermission,
+  RequireFeature,
+} from "@saas-chassis/sdk";
 
-@Controller('properties')
+@Controller("properties")
 export class PropertiesController {
   constructor(private propertiesService: PropertiesService) {}
 
   @Get()
-  @RequirePermission('properties:read')      // Enforces permission
-  @RequireFeature('property-management')     // Enforces feature flag
+  @RequirePermission("properties:read") // Enforces permission
+  @RequireFeature("property-management") // Enforces feature flag
   async getProperties(@CurrentUser() user: JwtPayload) {
     // user.tenantId, user.userId, user.roles automatically available
     return this.propertiesService.findAll(user.tenantId);
@@ -174,9 +180,9 @@ export class PropertiesController {
 ### Step 4: Use Tenant-Aware Entities
 
 ```typescript
-import { TenantScopedEntity, TenantAwareRepository } from '@saas-chassis/sdk';
+import { TenantScopedEntity, TenantAwareRepository } from "@saas-chassis/sdk";
 
-@Entity('properties')
+@Entity("properties")
 export class Property extends TenantScopedEntity {
   @Column() name: string;
   @Column() address: string;
@@ -262,17 +268,6 @@ Prefix: `/api/v1`
 
 ## Documentation
 
-- **`docs/00-MASTER-PLAN.md`** — Architecture overview and design decisions
-- **`docs/01-CHASSIS-FOUNDATION.md`** — Infrastructure setup details
-- **`docs/02-09-*.md`** — Per-service implementation specs
-- **`docs/CHASSIS-GAP-ANALYSIS.md`** — Known issues and status
-- **`docs/CHASSIS-USER-GUIDE.md`** — Detailed product integration guide
-- **`docs/CODEBASE-ANALYSIS.md`** — Technical reference (file locations, schemas, configs)
-
 ## Project Status
 
-The core platform is structurally complete. Before production use, review `docs/CHASSIS-GAP-ANALYSIS.md` for 11 critical issues that need to be addressed.
-
 ## Support
-
-For architecture questions, refer to `docs/00-MASTER-PLAN.md`. For service-specific implementation details, check the corresponding service documentation in the `docs/` directory.
