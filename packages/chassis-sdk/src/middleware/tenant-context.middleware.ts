@@ -5,6 +5,13 @@ import {
   TenantContextData,
 } from '../database/tenant-context.subscriber';
 
+/**
+ * Sentinel tenant ID for platform admins who operate outside any real tenant
+ * scope. The max UUID value (all f's) is chosen because it cannot appear in
+ * normal auto-generated UUID v4 data and is clearly synthetic.
+ */
+export const PLATFORM_ADMIN_TENANT_ID = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
+
 @Injectable()
 export class TenantContextMiddleware implements NestMiddleware {
   use(req: Request, _res: Response, next: NextFunction): void {
@@ -18,7 +25,7 @@ export class TenantContextMiddleware implements NestMiddleware {
     }
 
     const context: TenantContextData = {
-      tenantId: tenantId || '00000000-0000-0000-0000-000000000000',
+      tenantId: tenantId || PLATFORM_ADMIN_TENANT_ID,
       userId: userId || '',
       isPlatformAdmin,
     };

@@ -1,12 +1,13 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, QueryFailedError, Repository } from 'typeorm';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const slugify = require('slugify') as (str: string, opts?: Record<string, unknown>) => string;
 import { v4 as uuidv4 } from 'uuid';
@@ -98,21 +99,21 @@ export class TenantsService {
    * 5. Publish tenant.provisioned event (outside the transaction)
    */
   async createTenant(dto: CreateTenantDto, createdByUserId: string): Promise<Tenant> {
-    // Generate slug from name
+    // Generate slug from name — append a short random suffix to reduce the
+    // chance of a unique-constraint violation on concurrent inserts. The DB
+    // constraint is the authoritative guard; see the try/catch below.
     const baseSlug = slugify(dto.name, { lower: true, strict: true });
-
-    // Ensure slug uniqueness — append short random suffix on collision
-    const existingSlug = await this.tenantRepo.findOne({ where: { slug: baseSlug } });
-    const finalSlug = existingSlug
-      ? `${baseSlug}-${uuidv4().substring(0, 4)}`
-      : baseSlug;
+    const finalSlug = `${baseSlug}-${uuidv4().substring(0, 4)}`;
 
     // Resolve plan
     const planCode = dto.plan ?? 'free';
     const plan = await this.plansService.findByCode(planCode);
 
-    // Transactional provisioning
-    const savedTenant = await this.dataSource.transaction(async (manager) => {
+    // Transactional provisioning — the DB unique constraint on `slug` is the
+    // authoritative guard against concurrent duplicate slugs.
+    let savedTenant: Tenant;
+    try {
+    savedTenant = await this.dataSource.transaction(async (manager) => {
       // 3a. Create tenant record
       const tenant = manager.create(Tenant, {
         name: dto.name,
@@ -159,6 +160,12 @@ export class TenantsService {
 
       return provisioned;
     });
+    } catch (err) {
+      if (err instanceof QueryFailedError && (err as any).code === '23505') {
+        throw new ConflictException(`Tenant slug '${finalSlug}' is already taken`);
+      }
+      throw err;
+    }
 
     // 4. Create owner membership in identity service
     const identityServiceUrl = this.configService.get<string>('app.identityServiceUrl');

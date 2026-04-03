@@ -4,6 +4,7 @@
   "description": "Shared NestJS middleware for SaaS Chassis multi-tenancy, audit, and feature gating",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": ["dist", "src", "*.md"],
   "scripts": {
     "build": "tsup src/index.ts --format cjs --dts",
     "dev": "tsup src/index.ts --format cjs --dts --watch",

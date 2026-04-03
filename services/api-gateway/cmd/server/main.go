@@ -10,9 +10,11 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
 	"github.com/your-org/saas-chassis/api-gateway/internal/config"
+	"github.com/your-org/saas-chassis/api-gateway/internal/metering"
 	"github.com/your-org/saas-chassis/api-gateway/internal/middleware"
 	"github.com/your-org/saas-chassis/api-gateway/internal/proxy"
 )
@@ -35,6 +37,18 @@ func main() {
 	// Structured JSON logger
 	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
 
+	// PostgreSQL connection pool for metering flush (optional — skipped when DATABASE_URL is empty)
+	var dbPool *pgxpool.Pool
+	if cfg.DatabaseURL != "" {
+		dbPool, err = pgxpool.New(context.Background(), cfg.DatabaseURL)
+		if err != nil {
+			logger.Fatal().Err(err).Msg("failed to connect to PostgreSQL")
+		}
+		defer dbPool.Close()
+	} else {
+		logger.Warn().Msg("DATABASE_URL not set; metering flush to PostgreSQL is disabled")
+	}
+
 	// Gin engine (no default middleware)
 	r := gin.New()
 
@@ -45,6 +59,17 @@ func main() {
 
 	// Routes
 	proxy.SetupRoutes(r, cfg, redisClient, logger)
+
+	// Root context cancelled on shutdown signal — shared by background workers.
+	rootCtx, rootCancel := context.WithCancel(context.Background())
+	defer rootCancel()
+
+	// Start metering flusher if PostgreSQL is available.
+	if dbPool != nil {
+		flusher := metering.NewFlusher(dbPool, redisClient, logger)
+		go flusher.Start(rootCtx)
+		logger.Info().Msg("metering flusher started (interval: 5m)")
+	}
 
 	// Start server with graceful shutdown
 	srv := &http.Server{
@@ -63,6 +88,8 @@ func main() {
 	<-quit
 
 	logger.Info().Msg("Shutting down server...")
+	// Cancel root context to stop background workers (metering flusher, etc.).
+	rootCancel()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {

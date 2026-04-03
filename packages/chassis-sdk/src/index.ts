@@ -12,7 +12,10 @@ export {
 export { setRlsContext } from './database/rls-connection';
 
 // Middleware
-export { TenantContextMiddleware } from './middleware/tenant-context.middleware';
+export {
+  TenantContextMiddleware,
+  PLATFORM_ADMIN_TENANT_ID,
+} from './middleware/tenant-context.middleware';
 export { RequestIdMiddleware } from './middleware/request-id.middleware';
 
 // Decorators

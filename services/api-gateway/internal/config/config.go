@@ -9,6 +9,7 @@ type Config struct {
 	Port                 string
 	JWTSecret            string
 	RedisURL             string
+	DatabaseURL          string
 	InternalServiceToken string
 
 	// Chassis service URLs (always present)
@@ -34,6 +35,7 @@ func Load() *Config {
 		Port:                 getEnv("PORT", "8080"),
 		JWTSecret:            getEnv("JWT_SECRET", ""),
 		RedisURL:             getEnv("REDIS_URL", "redis://localhost:6379"),
+		DatabaseURL:          getEnv("DATABASE_URL", ""),
 		InternalServiceToken: getEnv("INTERNAL_SERVICE_TOKEN", ""),
 
 		IdentityServiceURL: getEnv("IDENTITY_SERVICE_URL", "http://localhost:3001"),

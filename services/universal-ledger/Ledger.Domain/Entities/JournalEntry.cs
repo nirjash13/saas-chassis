@@ -45,14 +45,13 @@ public class JournalEntry
 
     public void AddLine(Guid accountId, decimal debitAmount, decimal creditAmount, string? description = null)
     {
-        Lines.Add(new JournalLine
-        {
-            TenantId = TenantId,
-            AccountId = accountId,
-            DebitAmount = debitAmount,
-            CreditAmount = creditAmount,
-            Description = description,
-        });
+        Lines.Add(JournalLine.Create(
+            journalEntryId: Id,
+            tenantId: TenantId,
+            accountId: accountId,
+            debitAmount: debitAmount,
+            creditAmount: creditAmount,
+            description: description));
     }
 
     public void Post(Guid postedByUserId)
@@ -90,14 +89,13 @@ public class JournalEntry
 
         foreach (var line in Lines)
         {
-            reversal.Lines.Add(new JournalLine
-            {
-                TenantId = TenantId,
-                AccountId = line.AccountId,
-                DebitAmount = line.CreditAmount,
-                CreditAmount = line.DebitAmount,
-                Description = $"Reversal of: {line.Description}",
-            });
+            reversal.Lines.Add(JournalLine.Create(
+                journalEntryId: reversal.Id,
+                tenantId: TenantId,
+                accountId: line.AccountId,
+                debitAmount: line.CreditAmount,
+                creditAmount: line.DebitAmount,
+                description: $"Reversal of: {line.Description}"));
         }
 
         Status = EntryStatus.Reversed;
